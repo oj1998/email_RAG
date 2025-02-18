@@ -1,0 +1,12 @@
+# requirements.txt
+langchain
+openai
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+pandas
+beautifulsoup4
+chromadb
+python-dotenv
+fastapi
+uvicorn
