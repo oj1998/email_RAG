@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from loaders.gmail_client import GmailClient, EmailSearchOptions
+from client.gmail_client import GmailClient, EmailSearchOptions
 from loaders.vector_store_loader import VectorStoreFactory
 from loaders.simple_email_pipeline import SimpleEmailPipeline
 import os
