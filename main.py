@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from app.gmail_client import GmailClient, EmailSearchOptions
 from pydantic import BaseModel
 from typing import Optional
 from langchain_community.embeddings import HuggingFaceEmbeddings
