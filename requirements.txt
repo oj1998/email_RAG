@@ -1,12 +1,14 @@
-# requirements.txt
 langchain
+langchain-community
 sentence-transformers
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
 pandas
 beautifulsoup4
-chromadb
-python-dotenv
 fastapi
 uvicorn
+supabase
+psycopg2-binary
+python-dotenv
+chardet
