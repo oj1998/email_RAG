@@ -1,17 +1,36 @@
+# Web Framework
 fastapi
 uvicorn
-pydantic
-langchain-community
-huggingface-hub
+
+# Data Processing
+pandas
+numpy
+
+# Email and Text Processing
+chardet
+beautifulsoup4
+python-multipart
+
+# Google API
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
-pandas
-beautifulsoup4
-python-multipart
-supabase
-sqlalchemy
+
+# LangChain and ML
+langchain-community
+huggingface-hub
+sentence-transformers
+
+# Vector Storage
 chromadb
 pgvector
-chardet
+supabase-py
+sqlalchemy
+
+# Development
+python-dotenv
+typing-extensions
+pydantic
+
+# Install local package
 -e .
