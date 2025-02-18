@@ -2,14 +2,10 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings  # Free alternative
 from gmail_client import GmailClient, EmailSearchOptions
 from vector_store_loader import VectorStoreFactory
 from pipelines.simple_email_pipeline import SimpleEmailPipeline
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 app = FastAPI()
 
@@ -23,9 +19,7 @@ async def process_emails(search_request: SearchRequest):
     try:
         # Initialize components
         gmail_client = GmailClient("credentials.json")
-        embeddings_model = OpenAIEmbeddings(
-            openai_api_key=os.getenv('OPENAI_API_KEY')
-        )
+        embeddings_model = HuggingFaceEmbeddings()  # Uses free model
         
         vector_store = VectorStoreFactory.create(
             embeddings_model,
