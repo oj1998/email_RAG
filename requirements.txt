@@ -13,4 +13,5 @@ supabase
 sqlalchemy
 chromadb
 pgvector
+chardet
 -e .
