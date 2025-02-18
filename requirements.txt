@@ -1,14 +1,16 @@
-langchain
+fastapi
+uvicorn
+pydantic
 langchain-community
-sentence-transformers
+huggingface-hub
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
 pandas
 beautifulsoup4
-fastapi
-uvicorn
+python-multipart
 supabase
-psycopg2-binary
-python-dotenv
-chardet
+sqlalchemy
+chromadb
+pgvector
+-e .
