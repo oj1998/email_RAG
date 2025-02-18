@@ -2,6 +2,7 @@ from typing import List
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
+from loaders.email_loader import EmailLoader  # Updated this line
 
 class SimpleEmailPipeline:
     """
