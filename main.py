@@ -1,11 +1,11 @@
-# main.py
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from langchain_community.embeddings import HuggingFaceEmbeddings  # Free alternative
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from gmail_client import GmailClient, EmailSearchOptions
 from vector_store_loader import VectorStoreFactory
 from pipelines.simple_email_pipeline import SimpleEmailPipeline
+import os
 
 app = FastAPI()
 
@@ -19,13 +19,14 @@ async def process_emails(search_request: SearchRequest):
     try:
         # Initialize components
         gmail_client = GmailClient("credentials.json")
-        embeddings_model = HuggingFaceEmbeddings()  # Uses free model
+        embeddings_model = HuggingFaceEmbeddings()
         
         vector_store = VectorStoreFactory.create(
             embeddings_model,
             config={
-                "type": "chroma",
-                "collection_name": "email_store"
+                "supabase_url": os.getenv("SUPABASE_URL"),
+                "supabase_key": os.getenv("SUPABASE_SERVICE_KEY"),  # Use service key for full access
+                "table_name": "email_embeddings"
             }
         )
 
@@ -43,6 +44,7 @@ async def process_emails(search_request: SearchRequest):
         num_processed = pipeline.ingest_emails(gmail_client, search_options)
         
         return {"status": "success", "emails_processed": num_processed}
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
