@@ -24,7 +24,7 @@ sentence-transformers
 # Vector Storage
 chromadb
 pgvector
-supabase-py
+supabase
 sqlalchemy
 
 # Development
