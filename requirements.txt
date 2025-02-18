@@ -1,6 +1,6 @@
 # requirements.txt
 langchain
-openai
+sentence-transformers
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
