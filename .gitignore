@@ -1,1 +1,8 @@
-
+.env
+credentials.json
+token.json
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+chroma_db/
