@@ -21,16 +21,17 @@ class EmailSearchOptions:
 class GmailClient:
     """Client for interacting with Gmail API"""
     
-    def __init__(self, credentials_path: str):
-        """
-        Initialize Gmail client
-        
-        Args:
-            credentials_path: Path to credentials.json file from Google Cloud Console
-        """
-        self.SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+    def __init__(self, credentials_path: str = None):
+    self.SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+    self.credentials = os.getenv('GOOGLE_CREDENTIALS')
+    if self.credentials:
+        # Write environment variable content to temporary file
+        with open('temp_credentials.json', 'w') as f:
+            f.write(self.credentials)
+        self.credentials_path = 'temp_credentials.json'
+    else:
         self.credentials_path = credentials_path
-        self.service = self._get_gmail_service()
+    self.service = self._get_gmail_service()
 
     def _get_gmail_service(self):
         """Get authenticated Gmail service"""
