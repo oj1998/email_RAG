@@ -1,11 +1,11 @@
 import base64
-import os.path
+import os
 from datetime import datetime
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 import pandas as pd
@@ -16,40 +16,63 @@ class EmailSearchOptions:
     query: str = None  # Gmail search query
     max_results: int = 100
     include_attachments: bool = False
-    
+
 class GmailClient:
     """Client for interacting with Gmail API"""
     
-    def __init__(self, credentials_path: str = None):
+    def __init__(self, credentials: Dict = None, token: Dict = None):
         self.SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-        self.credentials = os.getenv('GOOGLE_CREDENTIALS')
-        if self.credentials:
-            # Write environment variable content to temporary file
-            with open('temp_credentials.json', 'w') as f:
-                f.write(self.credentials)
-            self.credentials_path = 'temp_credentials.json'
-        else:
-            self.credentials_path = credentials_path
+        self.credentials = credentials
+        self.token = token
+        self.service = None
+        if credentials and token:
+            self.service = self._get_gmail_service()
+
+    @staticmethod
+    def get_auth_url(credentials: Dict) -> tuple[Flow, str]:
+        """Generate authorization URL for Gmail OAuth"""
+        flow = Flow.from_client_config(
+            credentials,
+            scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+            redirect_uri=os.getenv('REDIRECT_URI', 'http://localhost:8000/oauth2callback')
+        )
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        return flow, auth_url
+
+    def authorize_with_code(self, flow: Flow, code: str) -> Dict:
+        """Exchange authorization code for tokens"""
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+        self.token = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        }
         self.service = self._get_gmail_service()
+        return self.token
 
     def _get_gmail_service(self):
         """Get authenticated Gmail service"""
-        creds = None
-        # Token.json stores user access/refresh tokens
-        if os.path.exists('token.json'):
-            creds = Credentials.from_authorized_user_file('token.json', self.SCOPES)
+        if not self.token:
+            raise ValueError("No token available. Must authenticate first.")
             
-        # If no valid credentials, let user log in
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
+        creds = Credentials(
+            token=self.token['token'],
+            refresh_token=self.token['refresh_token'],
+            token_uri=self.token['token_uri'],
+            client_id=self.token['client_id'],
+            client_secret=self.token['client_secret'],
+            scopes=self.token['scopes']
+        )
+        
+        if not creds.valid:
+            if creds.expired and creds.refresh_token:
                 creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    self.credentials_path, self.SCOPES)
-                creds = flow.run_local_server(port=0)
-            # Save credentials for future runs
-            with open('token.json', 'w') as token:
-                token.write(creds.to_json())
+                # Update stored token
+                self.token['token'] = creds.token
 
         return build('gmail', 'v1', credentials=creds)
 
@@ -144,17 +167,11 @@ class GmailClient:
             options: Search options including query string and parameters
             
         Returns:
-            DataFrame containing email data with columns:
-            - id: Email ID
-            - thread_id: Conversation thread ID
-            - subject: Email subject
-            - from: Sender
-            - to: Recipients
-            - date: Date sent
-            - body: Email content
-            - label_ids: Gmail labels
-            - attachments: List of attachment metadata (if requested)
+            DataFrame containing email data
         """
+        if not self.service:
+            raise ValueError("Gmail service not initialized. Must authenticate first.")
+            
         # Execute search
         query = options.query if options.query else "in:anywhere"
         results = self.service.users().messages().list(
