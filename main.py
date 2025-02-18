@@ -4,7 +4,7 @@ from typing import Optional
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from client.gmail_client import GmailClient, EmailSearchOptions
 from loaders.vector_store_loader import VectorStoreFactory
-from loaders.simple_email_pipeline import SimpleEmailPipeline
+from loaders.simple_pipeline import SimpleEmailPipeline
 import os
 
 app = FastAPI()
