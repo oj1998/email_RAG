@@ -8,7 +8,7 @@ from langchain_community.document_loaders.base import BaseLoader
 from langchain_core.documents import Document
 import pandas as pd
 
-from gmail_client import GmailClient, EmailSearchOptions
+from client.gmail_client import GmailClient, EmailSearchOptions
 
 DEFAULT_CHUNK_SIZE = 500
 DEFAULT_CHUNK_OVERLAP = 100
