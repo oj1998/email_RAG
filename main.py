@@ -1,11 +1,10 @@
 from fastapi import FastAPI, HTTPException
-from app.gmail_client import GmailClient, EmailSearchOptions
 from pydantic import BaseModel
 from typing import Optional
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from gmail_client import GmailClient, EmailSearchOptions
-from vector_store_loader import VectorStoreFactory
-from pipelines.simple_email_pipeline import SimpleEmailPipeline
+from loaders.gmail_client import GmailClient, EmailSearchOptions
+from loaders.vector_store_loader import VectorStoreFactory
+from loaders.simple_email_pipeline import SimpleEmailPipeline
 import os
 
 app = FastAPI()
