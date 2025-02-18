@@ -22,7 +22,8 @@ class GmailClient:
     """Client for interacting with Gmail API"""
     
     def __init__(self, credentials_path: str = None):
-    self.SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+    # The following lines should be indented
+    self.SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']  # Removed semicolon
     self.credentials = os.getenv('GOOGLE_CREDENTIALS')
     if self.credentials:
         # Write environment variable content to temporary file
