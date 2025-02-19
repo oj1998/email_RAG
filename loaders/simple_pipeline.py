@@ -24,8 +24,18 @@ class SimpleEmailPipeline:
         loader = EmailLoader(gmail_client, search_options)
         documents = loader.load_and_split()
         
-        # Store documents with embeddings
-        self.vector_store.add_documents(documents)
+        # Extract texts and metadata separately to avoid ID conflicts
+        texts = [doc.page_content for doc in documents]
+        metadatas = [
+            {k: v for k, v in doc.metadata.items() if k != 'id'}  # Exclude any potential id field
+            for doc in documents
+        ]
+        
+        # Store documents with embeddings, avoiding the add_documents method
+        self.vector_store.add_texts(
+            texts=texts,
+            metadatas=metadatas
+        )
         
         return len(documents)
 
