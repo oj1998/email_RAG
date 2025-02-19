@@ -57,7 +57,7 @@ class CustomSupabaseVectorStore(SupabaseVectorStore):
 
         # Insert directly using Supabase client
         # This lets Supabase handle ID generation
-        result = self.client.table(self.table_name).insert(records).execute()
+        result = self._client.table(self.table_name).insert(records).execute()
         
         # Extract the generated IDs from the result
         if hasattr(result, 'data') and result.data:
