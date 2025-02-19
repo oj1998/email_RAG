@@ -1,101 +1,139 @@
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
-from typing import Optional, Dict, List, Any
-import json
+from contextlib import asynccontextmanager
+from typing import Optional, Dict, Any, List
+import asyncio
+import asyncpg
+import logging
 import os
+import json
+from datetime import datetime
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.chat_models import ChatOpenAI
+# Import LangChain components
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.vectorstores.pgvector import PGVector
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
+
+# Import local components
 from client.gmail_client import GmailClient, EmailSearchOptions
-from loaders.vector_store_loader import VectorStoreFactory
-from loaders.simple_pipeline import SimpleEmailPipeline
-from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
+from retrievers.email_retriever import EmailQASystem
+from email_adapter import create_email_router, get_email_qa_system
+from models.request_models import QueryRequest, SearchRequest
+from utils.nlp_transformer import NLPTransformer
 
-app = FastAPI()
+# Enhanced logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-# Store flow objects temporarily (in production, use a proper session store)
+# Load environment variables and validate
+required_env_vars = [
+    'POSTGRES_CONNECTION_STRING', 
+    'OPENAI_API_KEY', 
+    'SUPABASE_URL', 
+    'SUPABASE_SERVICE_KEY'
+]
+missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+if missing_vars:
+    raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
+# Global state
 FLOWS = {}
-# Store Gmail clients (in production, use a proper user session management)
 GMAIL_CLIENTS = {}
-# Store email QA systems
-EMAIL_QA_SYSTEMS = {}
+pool: Optional[asyncpg.Pool] = None
+vector_store: Optional[PGVector] = None
+email_qa_system: Optional[EmailQASystem] = None
 
-class SearchRequest(BaseModel):
-    query: str
-    max_results: Optional[int] = 100
-    include_attachments: Optional[bool] = False
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown"""
+    global pool, vector_store, email_qa_system
+    try:
+        # Initialize database pool
+        pool = await asyncpg.create_pool(
+            os.getenv('POSTGRES_CONNECTION_STRING'),
+            min_size=5,
+            max_size=20,
+            statement_cache_size=0
+        )
+        logger.info("Database pool created successfully")
+        
+        # Initialize vector stores
+        vector_store = PGVector(
+            collection_name="document_embeddings",
+            connection_string=os.getenv('POSTGRES_CONNECTION_STRING'),
+            embedding_function=OpenAIEmbeddings()
+        )
+        logger.info("Document vector store initialized successfully")
+        
+        # Initialize email QA system
+        email_qa_system = await get_email_qa_system()
+        
+        yield
+        
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+        raise
+    finally:
+        if pool:
+            await pool.close()
+            logger.info("Database pool closed")
 
-class QueryRequest(BaseModel):
-    question: str
-    query_str: Optional[str] = None
-    filters: Optional[Dict[str, Any]] = None
-    k: Optional[int] = 5
+# Initialize FastAPI
+app = FastAPI(lifespan=lifespan)
 
-class EmailFilterRequest(BaseModel):
-    after_date: Optional[str] = None
-    before_date: Optional[str] = None
-    from_email: Optional[str] = None
-    to_email: Optional[str] = None
-    subject_contains: Optional[str] = None
-    has_attachment: Optional[bool] = None
-    label: Optional[str] = None
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-async def get_vector_store():
-    """Get or create vector store"""
-    embeddings_model = HuggingFaceEmbeddings()
-    vector_store = VectorStoreFactory.create(
-        embeddings_model,
-        config={
-            "type": "supabase",
-            "supabase_url": os.getenv("SUPABASE_URL"),
-            "supabase_key": os.getenv("SUPABASE_SERVICE_KEY"),
-            "collection_name": "email_embeddings"
+# Include email router
+app.include_router(create_email_router())
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    try:
+        if not pool:
+            raise HTTPException(status_code=500, detail="Database pool not initialized")
+        async with pool.acquire() as conn:
+            await conn.execute('SELECT 1')
+            
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "vector_store": "initialized" if vector_store else "not initialized",
+            "email_system": "initialized" if email_qa_system else "not available",
+            "timestamp": datetime.utcnow().isoformat()
         }
-    )
-    return vector_store, embeddings_model
-
-async def get_qa_system():
-    """Get or create email QA system"""
-    if 'email_qa' not in EMAIL_QA_SYSTEMS:
-        vector_store, embeddings_model = await get_vector_store()
-        
-        # Initialize language model
-        llm = ChatOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            model_name="gpt-3.5-turbo",
-            temperature=0
-        )
-        
-        # Create QA system
-        EMAIL_QA_SYSTEMS['email_qa'] = EmailQASystem(
-            vector_store=vector_store,
-            embeddings_model=embeddings_model,
-            llm=llm,
-            k=5,
-            use_reranker=True
-        )
-    
-    return EMAIL_QA_SYSTEMS['email_qa']
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 @app.get("/auth/gmail")
 async def gmail_auth():
     """Start Gmail OAuth flow"""
     try:
-        # Get credentials from environment
         creds_json = os.getenv('GOOGLE_CREDENTIALS')
         if not creds_json:
             raise HTTPException(status_code=500, detail="Google credentials not configured")
         
         credentials = json.loads(creds_json)
-        
-        # Generate auth URL
         flow, auth_url = GmailClient.get_auth_url(credentials)
-        
-        # Store flow object for callback
         FLOWS['gmail'] = flow
         
-        # Redirect to Google's auth page
         return RedirectResponse(url=auth_url)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -108,91 +146,103 @@ async def oauth2callback(code: str, state: Optional[str] = None):
             raise HTTPException(status_code=400, detail="No active OAuth flow")
             
         flow = FLOWS['gmail']
-        
-        # Initialize Gmail client with credentials
         creds_json = os.getenv('GOOGLE_CREDENTIALS')
         credentials = json.loads(creds_json)
         
         gmail_client = GmailClient(credentials=credentials)
-        
-        # Exchange code for tokens
         token = gmail_client.authorize_with_code(flow, code)
-        
-        # Store client for later use
         GMAIL_CLIENTS['user'] = gmail_client
         
         return {"message": "Authentication successful", "token": token}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/process-emails")
-async def process_emails(search_request: SearchRequest):
-    """Process and embed emails"""
+async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
+    """Process queries for document retrieval"""
+    if not pool or not vector_store:
+        raise HTTPException(status_code=503, detail="Service not fully initialized")
+
     try:
-        if 'user' not in GMAIL_CLIENTS:
-            raise HTTPException(status_code=401, detail="Must authenticate with Gmail first")
-            
-        gmail_client = GMAIL_CLIENTS['user']
-        vector_store, embeddings_model = await get_vector_store()
+        # Configure search
+        search_kwargs = {"filter": {}, "k": 5}
+        if request.document_ids:
+            search_kwargs["filter"]["document_id"] = {"$in": request.document_ids}
+        if request.metadata_filter:
+            search_kwargs["filter"].update(request.metadata_filter)
 
-        pipeline = SimpleEmailPipeline(embeddings_model, vector_store)
-
-        search_options = EmailSearchOptions(
-            query=search_request.query,
-            max_results=search_request.max_results,
-            include_attachments=search_request.include_attachments
+        # Set up retrieval chain
+        memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True,
+            output_key="answer"
+        )
+        retriever = vector_store.as_retriever(search_kwargs=search_kwargs)
+        qa = ConversationalRetrievalChain.from_llm(
+            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.7),
+            retriever=retriever,
+            memory=memory,
+            return_source_documents=True
         )
 
-        num_processed = pipeline.ingest_emails(gmail_client, search_options)
-        
-        return {"status": "success", "emails_processed": num_processed}
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/query-emails")
-async def query_emails(query_request: QueryRequest):
-    """Query emails and get an answer"""
-    try:
-        qa_system = await get_qa_system()
-        
-        answer = qa_system.query(
-            question=query_request.question,
-            query_str=query_request.query_str,
-            filters=query_request.filters,
-            k=query_request.k
+        # Execute query
+        chain_response = await asyncio.get_event_loop().run_in_executor(
+            None, 
+            lambda: qa({"question": request.query, "chat_history": []})
         )
-        
-        return {"answer": answer}
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/get-relevant-emails")
-async def get_relevant_emails(query_request: QueryRequest):
-    """Get relevant emails without generating an answer"""
-    try:
-        qa_system = await get_qa_system()
-        
-        relevant_emails = qa_system.get_relevant_emails(
-            query=query_request.query_str or query_request.question,
-            filters=query_request.filters,
-            k=query_request.k
+        # Transform response
+        transformer = NLPTransformer()
+        formatted_response = await transformer.transform_content(
+            query=request.query,
+            raw_response=chain_response.get("answer", "No response generated"),
+            context=request.context.dict(),
+            source_documents=chain_response.get("source_documents", [])
         )
-        
-        # Convert documents to dict format
-        results = []
-        for doc in relevant_emails:
-            results.append({
-                "content": doc.page_content,
-                "metadata": doc.metadata
-            })
-        
-        return {"emails": results}
-    
+
+        # Store in database
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO messages (role, content, conversation_id, metadata) VALUES ($1, $2, $3, $4)",
+                'user', request.query, request.conversation_id,
+                json.dumps({"context": request.context.dict()})
+            )
+            await conn.execute(
+                "INSERT INTO messages (role, content, conversation_id, metadata) VALUES ($1, $2, $3, $4)",
+                'assistant', formatted_response, request.conversation_id,
+                json.dumps({})
+            )
+
+        return {
+            "status": "success",
+            "answer": formatted_response,
+            "sources": [
+                {
+                    "id": doc.metadata.get("document_id"),
+                    "title": doc.metadata.get("title"),
+                    "page": doc.metadata.get("page")
+                } for doc in chain_response.get("source_documents", [])
+            ]
+        }
+
     except Exception as e:
+        logger.error(f"Error in document query processing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+@app.post("/query")
+async def query_endpoint(request: QueryRequest):
+    """Main query endpoint that routes to appropriate handler"""
+    try:
+        if email_qa_system and (request.email_filters or is_email_query(request)):
+            logger.info(f"Routing to email system: {request.query}")
+            return await process_email_query(request)
+        else:
+            logger.info(f"Routing to document system: {request.query}")
+            return await process_document_query(request)
+    except Exception as e:
+        logger.error(f"Error in query routing: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
