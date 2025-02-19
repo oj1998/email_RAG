@@ -93,8 +93,8 @@ class VectorStoreFactory:
         embeddings = df[_COL_EMBEDDINGS].tolist()
         texts = df[_COL_CONTENT].tolist()
         
-        # Remove explicit ID handling since it's auto-generated
-        vectorstore.add_embeddings(
+        # Use add_texts to avoid id conflicts
+        vectorstore.add_texts(
             texts=texts,
             embeddings=embeddings,
             metadatas=metadata
