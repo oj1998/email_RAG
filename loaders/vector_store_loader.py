@@ -68,7 +68,14 @@ class VectorStoreFactory:
             client=supabase_client,
             embedding=embeddings_model,
             table_name=settings.collection_name,
-            query_name="match_email_embeddings"
+            query_name="match_email_embeddings",
+            # Add these to match your table schema:
+            table_schema={
+                "id": "id",  # Let Supabase handle this
+                "content": "content",
+                "embedding": "embedding",
+                "metadata": "metadata"
+            }
         )
 
     @staticmethod
