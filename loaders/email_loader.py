@@ -45,23 +45,23 @@ class EmailLoader(BaseLoader):
         # Handle encoding issues
         if isinstance(body_str, bytes):
             encoding = chardet.detect(body_str)['encoding']
-            if 'windows' in encoding.lower():
+            if encoding and 'windows' in encoding.lower():
                 encoding = 'utf-8'
             try:
                 body_str = str(body_str, encoding=encoding)
             except UnicodeDecodeError:
-                body_str = row['body'].decode(encoding, errors='ignore')
+                body_str = row['body'].decode(encoding or 'utf-8', errors='ignore')
 
         # Clean up newlines
         body_str = re.sub(r'[\r\n]\s*[\r\n]', '\n\n', body_str)
 
-        # Create metadata structure for Supabase - removed id field since it's auto-generated
+        # Create metadata structure - explicitly exclude 'id' field to prevent conflicts
         metadata = {
             'email_id': str(row['id']),
             'thread_id': str(row['thread_id']),
             'label_ids': row['label_ids'] if isinstance(row['label_ids'], list) else [],
-            'sender': row['from'] or '',       # Changed to match schema
-            'recipients': row['to'] or '',     # Changed to match schema
+            'sender': row['from'] or '',
+            'recipients': row['to'] or '',
             'subject': row['subject'] or '',
             'date': row['date'] or '',
             'mime_type': row['mimeType'] or '',
