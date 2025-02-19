@@ -1,6 +1,8 @@
 import ast
 import uuid
 from enum import Enum
+from typing import List, Optional, Any, Dict, Iterable
+
 from langchain_core.embeddings import Embeddings
 from langchain_community.vectorstores import Chroma, PGVector, SupabaseVectorStore
 from langchain_core.vectorstores import VectorStore
@@ -10,11 +12,58 @@ from supabase.client import create_client
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.exc import DisconnectionError
-from loaders.custom_supabase_store import CustomSupabaseVectorStore
 
 _COL_EMBEDDINGS = "embedding"
 _COL_METADATA = "metadata"
 _COL_CONTENT = "content"
+
+# Custom Supabase vector store that properly handles auto-generated IDs
+class CustomSupabaseVectorStore(SupabaseVectorStore):
+    """Custom Supabase vector store that properly handles auto-generated IDs"""
+
+    def add_texts(
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[Dict[str, Any]]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> List[str]:
+        """Add texts to the vectorstore with proper ID handling
+
+        Args:
+            texts: Iterable of strings to add to the vectorstore.
+            metadatas: Optional list of metadatas associated with the texts.
+            ids: Optional list of IDs to associate with the texts. Will be ignored.
+
+        Returns:
+            List of IDs from the vectorstore
+        """
+        if not texts:
+            return []
+
+        # Process inputs
+        embeddings = self._embedding.embed_documents(list(texts))
+        
+        # Create records without explicit ID values
+        records = []
+        for i, (text, embedding) in enumerate(zip(texts, embeddings)):
+            record = {
+                "content": text,
+                "embedding": embedding,
+            }
+            if metadatas is not None:
+                record["metadata"] = metadatas[i]
+            records.append(record)
+
+        # Insert directly using Supabase client
+        # This lets Supabase handle ID generation
+        result = self.client.table(self.table_name).insert(records).execute()
+        
+        # Extract the generated IDs from the result
+        if hasattr(result, 'data') and result.data:
+            return [str(item['id']) for item in result.data]
+        return []
+
 
 class VectorStoreType(str, Enum):
     CHROMA = "chroma"
