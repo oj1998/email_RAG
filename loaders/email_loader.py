@@ -84,14 +84,6 @@ class EmailLoader(BaseLoader):
             metadata=metadata
         )
 
-        # Ensure no None values
-        for key, value in email_doc.metadata.items():
-            if value is None:
-                if isinstance(metadata[key], list):
-                    email_doc.metadata[key] = []
-                else:
-                    email_doc.metadata[key] = ""
-
         return email_doc
 
     def load_and_split(self, text_splitter: TextSplitter = None) -> List[Document]:
