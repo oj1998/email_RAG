@@ -16,9 +16,12 @@ class SimpleEmailPipeline:
         self.embeddings_model = embeddings_model
         self.vector_store = vector_store
 
-    def ingest_emails(self, gmail_client, search_options) -> None:
+    def ingest_emails(self, gmail_client, search_options) -> int:
         """
         Process emails and store their embeddings
+        
+        Returns:
+            int: Number of documents processed
         """
         # Load and process emails
         loader = EmailLoader(gmail_client, search_options)
