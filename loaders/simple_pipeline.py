@@ -2,7 +2,7 @@ from typing import List
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
-from loaders.email_loader import EmailLoader  # Updated this line
+from loaders.email_loader import EmailLoader
 
 class SimpleEmailPipeline:
     """
@@ -20,8 +20,6 @@ class SimpleEmailPipeline:
         """
         Process emails and store their embeddings
         """
-        from email_loader import EmailLoader
-        
         # Load and process emails
         loader = EmailLoader(gmail_client, search_options)
         documents = loader.load_and_split()
