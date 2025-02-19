@@ -2,35 +2,48 @@
 fastapi
 uvicorn
 
-# Data Processing
+# Data Processing & ML
 pandas
 numpy
+scipy
+scikit-learn
+spacy
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
-# Email and Text Processing
+# Database and Vector Storage
+pgvector
+psycopg2-binary
+asyncpg
+chromadb
+supabase
+sqlalchemy
+
+# LangChain Ecosystem
+langchain
+langchain-community
+langchain-openai
+huggingface-hub
+sentence-transformers
+
+# Document Processing
+pypdf
+PyMuPDF
 chardet
 beautifulsoup4
 python-multipart
 
-# Google API
+# Google API Integration
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
 
-# LangChain and ML
-langchain-community
-huggingface-hub
-sentence-transformers
-
-# Vector Storage
-chromadb
-pgvector
-supabase
-sqlalchemy
-
-# Development
+# Development & Utils
 python-dotenv
+python-json-logger
 typing-extensions
 pydantic
+aiohttp
+asyncio
 
-# Install local package
+# Local Package
 -e .
