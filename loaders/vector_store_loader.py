@@ -11,7 +11,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.exc import DisconnectionError
 
-_COL_ID = "id"
 _COL_EMBEDDINGS = "embedding"  # Changed to match your Supabase schema
 _COL_METADATA = "metadata"
 _COL_CONTENT = "content"
@@ -93,13 +92,12 @@ class VectorStoreFactory:
         metadata = df[_COL_METADATA].tolist()
         embeddings = df[_COL_EMBEDDINGS].tolist()
         texts = df[_COL_CONTENT].tolist()
-        ids = [str(uuid.uuid1()) for _ in range(len(df))] if _COL_ID not in df.columns else df[_COL_ID].tolist()
-
+        
+        # Remove explicit ID handling since it's auto-generated
         vectorstore.add_embeddings(
             texts=texts,
             embeddings=embeddings,
-            metadatas=metadata,
-            ids=ids
+            metadatas=metadata
         )
         return vectorstore
 
@@ -112,7 +110,7 @@ class VectorStoreFactory:
         try:
             with engine.connect() as connection:
                 query = f"""
-                    SELECT id, embedding, metadata, content 
+                    SELECT embedding, metadata, content 
                     FROM {settings.collection_name}
                 """
                 return pd.read_sql(query, connection)
