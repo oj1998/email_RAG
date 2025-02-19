@@ -55,13 +55,13 @@ class EmailLoader(BaseLoader):
         # Clean up newlines
         body_str = re.sub(r'[\r\n]\s*[\r\n]', '\n\n', body_str)
 
-        # Create metadata structure for Supabase
+        # Create metadata structure for Supabase - removed id field since it's auto-generated
         metadata = {
             'email_id': str(row['id']),
             'thread_id': str(row['thread_id']),
             'label_ids': row['label_ids'] if isinstance(row['label_ids'], list) else [],
-            'from': row['from'] or '',
-            'to': row['to'] or '',
+            'sender': row['from'] or '',       # Changed to match schema
+            'recipients': row['to'] or '',     # Changed to match schema
             'subject': row['subject'] or '',
             'date': row['date'] or '',
             'mime_type': row['mimeType'] or '',
@@ -78,13 +78,10 @@ class EmailLoader(BaseLoader):
             }
         }
 
-        # Create document with processed content and metadata
-        email_doc = Document(
+        return Document(
             page_content=body_str,
             metadata=metadata
         )
-
-        return email_doc
 
     def load_and_split(self, text_splitter: TextSplitter = None) -> List[Document]:
         """Load and split documents using specified or default text splitter."""
