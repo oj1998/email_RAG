@@ -77,7 +77,13 @@ async def process_emails(search_request: SearchRequest):
             raise HTTPException(status_code=401, detail="Must authenticate with Gmail first")
             
         gmail_client = GMAIL_CLIENTS['user']
-        embeddings_model = HuggingFaceEmbeddings()
+        
+        # Use the correct model that produces 384-dimensional embeddings
+        embeddings_model = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",  # This model produces 384-dimensional embeddings
+            model_kwargs={'device': 'cpu'},
+            encode_kwargs={'normalize_embeddings': True}
+        )
         
         vector_store = VectorStoreFactory.create(
             embeddings_model,
