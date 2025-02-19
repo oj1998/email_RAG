@@ -12,7 +12,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.exc import DisconnectionError
 
 _COL_ID = "id"
-_COL_EMBEDDINGS = "embeddings"
+_COL_EMBEDDINGS = "embedding"  # Changed to match your Supabase schema
 _COL_METADATA = "metadata"
 _COL_CONTENT = "content"
 
@@ -68,14 +68,7 @@ class VectorStoreFactory:
             client=supabase_client,
             embedding=embeddings_model,
             table_name=settings.collection_name,
-            query_name="match_email_embeddings",
-            # Add these to match your table schema:
-            table_schema={
-                "id": "id",  # Let Supabase handle this
-                "content": "content",
-                "embedding": "embedding",
-                "metadata": "metadata"
-            }
+            query_name="match_email_embeddings"
         )
 
     @staticmethod
@@ -119,7 +112,7 @@ class VectorStoreFactory:
         try:
             with engine.connect() as connection:
                 query = f"""
-                    SELECT id, embeddings, metadata, content 
+                    SELECT id, embedding, metadata, content 
                     FROM {settings.collection_name}
                 """
                 return pd.read_sql(query, connection)
