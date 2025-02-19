@@ -10,8 +10,9 @@ from supabase.client import create_client
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.exc import DisconnectionError
+from loaders.custom_supabase_store import CustomSupabaseVectorStore
 
-_COL_EMBEDDINGS = "embedding"  # Changed to match your Supabase schema
+_COL_EMBEDDINGS = "embedding"
 _COL_METADATA = "metadata"
 _COL_CONTENT = "content"
 
@@ -54,16 +55,16 @@ class VectorStoreFactory:
         )
 
     @staticmethod
-    def _load_supabase_store(embeddings_model: Embeddings, settings) -> SupabaseVectorStore:
+    def _load_supabase_store(embeddings_model: Embeddings, settings) -> VectorStore:
         """
-        Creates a Supabase vector store instance
+        Creates a custom Supabase vector store instance that properly handles IDs
         """
         supabase_client = create_client(
             settings.supabase_url,
             settings.supabase_key
         )
         
-        return SupabaseVectorStore(
+        return CustomSupabaseVectorStore(
             client=supabase_client,
             embedding=embeddings_model,
             table_name=settings.collection_name,
