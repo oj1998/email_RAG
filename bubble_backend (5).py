@@ -16,6 +16,7 @@ import asyncpg
 from dotenv import load_dotenv
 import asyncio
 from contextlib import asynccontextmanager
+from email_adapter import get_email_qa_system, process_email_query as adapter_process_email_query, is_email_query as adapter_is_email_query
 
 # Import email-related components
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -52,7 +53,6 @@ SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
 # Global variables for state management
 pool: Optional[asyncpg.Pool] = None
 vector_store: Optional[PGVector] = None
-email_qa_system: Optional[EmailQASystem] = None
 
 # Pydantic models
 class Weather(BaseModel):
@@ -136,41 +136,7 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Document vector store initialized successfully")
         
-        # Initialize email QA system
-        try:
-            # Initialize embedding model
-            embeddings_model = HuggingFaceEmbeddings()
-            
-            # Initialize language model
-            llm = ChatOpenAI(
-                api_key=OPENAI_API_KEY,
-                model_name="gpt-3.5-turbo",
-                temperature=0.2
-            )
-            
-            # Initialize vector store for emails
-            email_vector_store = VectorStoreFactory.create(
-                embeddings_model,
-                config={
-                    "type": "supabase",
-                    "supabase_url": SUPABASE_URL,
-                    "supabase_key": SUPABASE_KEY,
-                    "collection_name": "email_embeddings"
-                }
-            )
-            
-            # Create QA system
-            email_qa_system = EmailQASystem(
-                vector_store=email_vector_store,
-                embeddings_model=embeddings_model,
-                llm=llm,
-                k=5,
-                use_reranker=True
-            )
-            logger.info("Email QA system initialized successfully")
-        except Exception as e:
-            logger.warning(f"Email QA system initialization failed: {e}")
-            email_qa_system = None
+     
         
     except Exception as e:
         logger.error(f"Startup error: {e}")
@@ -212,7 +178,11 @@ async def health_check():
             raise HTTPException(status_code=500, detail="Vector store not initialized")
             
         # Check email system status
-        email_status = "initialized" if email_qa_system else "not available"
+        try:
+    await get_email_qa_system()
+    email_status = "initialized"
+except Exception:
+    email_status = "not available"
             
         return {
             "status": "healthy",
@@ -391,56 +361,17 @@ class NLPTransformer:
 
 # Email query handler
 async def process_email_query(request: QueryRequest) -> Dict[str, Any]:
-    """
-    Process a query specifically for email data
-    
-    Args:
-        request: The query request
-        
-    Returns:
-        Response with answer and metadata
-    """
+    """Process a query specifically for email data"""
     try:
-        if not email_qa_system:
-            raise HTTPException(status_code=503, detail="Email system not available")
-        
-        # Convert email filters if provided
-        filters = None
-        if request.email_filters:
-            filters = request.email_filters.dict(exclude_none=True)
-        
-        # Get answer from email QA system
-        answer = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: email_qa_system.query(
-                question=request.query, 
-                filters=filters,
-                k=5
-            )
+        # Get answer using email adapter's process_email_query
+        response = await adapter_process_email_query(
+            query=request.query,
+            conversation_id=request.conversation_id,
+            context=request.context.dict(),
+            email_filters=request.email_filters.dict() if request.email_filters else None
         )
         
-        # Get source emails for reference
-        relevant_emails = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: email_qa_system.get_relevant_emails(
-                query=request.query, 
-                filters=filters, 
-                k=3
-            )
-        )
-        
-        # Format source information
-        sources = []
-        for email in relevant_emails:
-            source_info = {
-                "id": email.metadata.get("email_id", "unknown"),
-                "title": email.metadata.get("subject", "Email"),
-                "sender": email.metadata.get("sender", "Unknown"),
-                "date": email.metadata.get("date", "")
-            }
-            sources.append(source_info)
-        
-        # Store in database
+        # Store in database (keeping the existing database logic)
         async with pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO messages (role, content, conversation_id, metadata)
@@ -451,41 +382,23 @@ async def process_email_query(request: QueryRequest) -> Dict[str, Any]:
             await conn.execute("""
                 INSERT INTO messages (role, content, conversation_id, metadata)
                 VALUES ($1, $2, $3, $4)
-            """, 'assistant', answer, request.conversation_id,
-                json.dumps({"sources": sources}))
+            """, 'assistant', response["answer"], request.conversation_id,
+                json.dumps({"sources": response.get("sources", [])}))
         
-        return {
-            "status": "success",
-            "answer": answer,
-            "sources": sources
-        }
+        return response
         
     except Exception as e:
         logger.error(f"Error in email query processing: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Email query processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 def is_email_query(request: QueryRequest) -> bool:
-    """
-    Determine if the query should be routed to email system
-    based on info_sources or explicit flags
-    """
-    # If email_filters is explicitly provided, it's an email query
-    if request.email_filters:
-        return True
-        
-    # Check if emails are in the conversation's info_sources
-    if request.info_sources:
-        email_sources = ["emails", "email", "mail", "gmail"]
-        if any(source.lower() in email_sources for source in request.info_sources):
-            return True
-            
-    # Check query text for email-specific indicators
-    query = request.query.lower()
-    email_keywords = ["email", "mail", "gmail", "inbox", "message", "received", "sent"]
-    if any(keyword in query for keyword in email_keywords):
-        return True
-        
-    return False
+    """Determine if the query should be routed to email system"""
+    return adapter_is_email_query({
+        "query": request.query,
+        "info_sources": request.info_sources,
+        "context": request.context.dict(),
+        "target_system": "email" if request.email_filters else None
+    })
 
 # Document query handler (existing logic extracted to a separate function)
 async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
@@ -588,7 +501,7 @@ async def query_documents(request: QueryRequest):
     """Main query endpoint that determines whether to use document or email retrieval"""
     try:
         # Route based on query type
-        if is_email_query(request) and email_qa_system:
+        if is_email_query(request):
             logger.info(f"Routing query to email system: {request.query}")
             return await process_email_query(request)
         else:
