@@ -19,7 +19,7 @@ from langchain.memory import ConversationBufferMemory
 # Import local components
 from client.gmail_client import GmailClient, EmailSearchOptions
 from retrievers.email_retriever import EmailQASystem
-from email_adapter import create_email_router, get_email_qa_system, is_email_query
+from email_adapter import create_email_router, get_email_qa_system, is_email_query, process_email_query
 from models.request_models import QueryRequest, SearchRequest
 from utils.nlp_transformer import NLPTransformer
 
@@ -232,9 +232,24 @@ async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
 async def query_endpoint(request: QueryRequest):
     """Main query endpoint that routes to appropriate handler"""
     try:
-        if email_qa_system and (request.email_filters or is_email_query(request)):
+        # Convert Pydantic model to dictionary for email adapter functions
+        request_dict = {
+            "query": request.query,
+            "conversation_id": request.conversation_id,
+            "context": request.context.dict() if request.context else {},
+            "email_filters": request.email_filters.dict() if request.email_filters else None,
+            "info_sources": request.info_sources
+        }
+        
+        if email_qa_system and (request.email_filters or is_email_query(request_dict)):
             logger.info(f"Routing to email system: {request.query}")
-            return await process_email_query(request)
+            email_result = await process_email_query(
+                query=request.query,
+                conversation_id=request.conversation_id,
+                context=request.context.dict() if request.context else {},
+                email_filters=request.email_filters.dict() if request.email_filters else None
+            )
+            return email_result
         else:
             logger.info(f"Routing to document system: {request.query}")
             return await process_document_query(request)
