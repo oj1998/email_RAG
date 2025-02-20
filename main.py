@@ -19,7 +19,7 @@ from langchain.memory import ConversationBufferMemory
 # Import local components
 from client.gmail_client import GmailClient, EmailSearchOptions
 from retrievers.email_retriever import EmailQASystem
-from email_adapter import create_email_router, get_email_qa_system
+from email_adapter import create_email_router, get_email_qa_system, is_email_query
 from models.request_models import QueryRequest, SearchRequest
 from utils.nlp_transformer import NLPTransformer
 
