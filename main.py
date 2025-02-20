@@ -74,9 +74,6 @@ class SearchRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = None
     limit: Optional[int] = 10
 
-# Import the NLPTransformer module
-from utils.nlp_transformer import NLPTransformer
-
 # Enhanced logging
 logging.basicConfig(
     level=logging.INFO,
@@ -101,6 +98,21 @@ GMAIL_CLIENTS = {}
 pool: Optional[asyncpg.Pool] = None
 vector_store: Optional[PGVector] = None
 email_qa_system: Optional[EmailQASystem] = None
+
+# Simple function to format sources
+def format_sources(source_documents: List) -> str:
+    """Format source documents into a readable string"""
+    if not source_documents:
+        return ""
+        
+    sources = []
+    for doc in source_documents:
+        source_text = f"• {doc.metadata.get('title', 'Unknown Document')}"
+        if doc.metadata.get('page'):
+            source_text += f" (Page {doc.metadata.get('page')})"
+        sources.append(source_text)
+        
+    return "\n".join(sources)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -244,14 +256,16 @@ async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
             lambda: qa({"question": request.query, "chat_history": []})
         )
 
-        # Transform response
-        transformer = NLPTransformer()
-        formatted_response = await transformer.transform_content(
-            query=request.query,
-            raw_response=chain_response.get("answer", "No response generated"),
-            context=request.context.dict() if request.context else {},
-            source_documents=chain_response.get("source_documents", [])
-        )
+        # Get response and sources
+        response_content = chain_response.get("answer", "No response generated")
+        source_documents = chain_response.get("source_documents", [])
+        
+        # Format response with sources
+        if source_documents:
+            sources_text = format_sources(source_documents)
+            formatted_response = f"{response_content}\n\nSources:\n{sources_text}"
+        else:
+            formatted_response = response_content
 
         # Store in database
         async with pool.acquire() as conn:
@@ -274,7 +288,7 @@ async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
                     "id": doc.metadata.get("document_id"),
                     "title": doc.metadata.get("title"),
                     "page": doc.metadata.get("page")
-                } for doc in chain_response.get("source_documents", [])
+                } for doc in source_documents
             ]
         }
 
