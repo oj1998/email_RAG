@@ -24,11 +24,18 @@ class ConversationContext(BaseModel):
 class ConversationHandler:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True,
-            output_key="answer"
-        )
+        # Dictionary to store conversation-specific memories
+        self.memories: Dict[str, ConversationBufferMemory] = {}
+
+    def _get_or_create_memory(self, conversation_id: str) -> ConversationBufferMemory:
+        """Get an existing memory instance or create a new one for the conversation"""
+        if conversation_id not in self.memories:
+            self.memories[conversation_id] = ConversationBufferMemory(
+                memory_key="chat_history",
+                return_messages=True,
+                output_key="answer"
+            )
+        return self.memories[conversation_id]
 
     async def load_conversation_history(
         self, 
@@ -37,6 +44,11 @@ class ConversationHandler:
         time_window: timedelta = timedelta(hours=24)
     ) -> ConversationContext:
         """Load and process conversation history"""
+        # Get conversation-specific memory
+        memory = self._get_or_create_memory(conversation_id)
+        # Clear existing memory to avoid duplicates
+        memory.chat_memory.clear()
+
         async with self.pool.acquire() as conn:
             history = await conn.fetch("""
                 SELECT role, content, metadata, created_at
@@ -57,12 +69,12 @@ class ConversationHandler:
                 for record in history
             ]
 
-            # Update memory with history
+            # Update conversation-specific memory with history
             for turn in reversed(turns):
                 if turn.role == 'user':
-                    self.memory.chat_memory.add_message(HumanMessage(content=turn.content))
+                    memory.chat_memory.add_message(HumanMessage(content=turn.content))
                 else:
-                    self.memory.chat_memory.add_message(AIMessage(content=turn.content))
+                    memory.chat_memory.add_message(AIMessage(content=turn.content))
 
             summary = None
             key_points = []
@@ -91,9 +103,10 @@ class ConversationHandler:
                     VALUES ($1, $2, $3, $4, NOW())
                 """, role, content, conversation_id, json.dumps(metadata) if metadata else None)
 
-                # Update memory
+                # Update conversation-specific memory
+                memory = self._get_or_create_memory(conversation_id)
                 message = HumanMessage(content=content) if role == 'user' else AIMessage(content=content)
-                self.memory.chat_memory.add_message(message)
+                memory.chat_memory.add_message(message)
 
         except Exception as e:
             logger.error(f"Error saving conversation turn: {e}")
@@ -134,8 +147,18 @@ class ConversationHandler:
             logger.error(f"Error generating conversation summary: {e}")
             return None, []
 
-    def get_relevant_context(self) -> Dict:
-        """Get relevant context from conversation history"""
+    def get_relevant_context(self, conversation_id: str) -> Dict:
+        """Get relevant context from conversation-specific history"""
+        memory = self._get_or_create_memory(conversation_id)
         return {
-            "chat_history": self.memory.load_memory_variables({})
+            "chat_history": memory.load_memory_variables({})
         }
+
+    def cleanup_old_memories(self, max_age: timedelta = timedelta(hours=24)):
+        """Remove memory instances for conversations that haven't been accessed recently"""
+        current_time = datetime.now()
+        # Add last_accessed timestamp to memory instances
+        for conversation_id in list(self.memories.keys()):
+            if hasattr(self.memories[conversation_id], 'last_accessed'):
+                if current_time - self.memories[conversation_id].last_accessed > max_age:
+                    del self.memories[conversation_id]
