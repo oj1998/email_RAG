@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, List, Optional
 import logging
 import os
@@ -10,13 +10,17 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.chat_models import ChatOpenAI
 from loaders.vector_store_loader import VectorStoreFactory
 from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
-from models.request_models import EmailFilter, QueryRequest, EmailQueryResponse
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 # Global email QA system instance
 EMAIL_QA_SYSTEM = None
+
+# Type definitions without importing from models
+# This prevents circular imports
+QueryRequest = Dict[str, Any]
+EmailFilter = Dict[str, Any]
 
 async def get_email_qa_system():
     """Initialize or return existing email QA system"""
@@ -84,24 +88,24 @@ def extract_time_filters(context: Dict[str, Any]) -> Dict[str, str]:
             
     return filters
 
-async def process_email_query(request: QueryRequest) -> Dict[str, Any]:
+async def process_email_query(query: str, conversation_id: str, context: Dict[str, Any] = None, email_filters: Dict[str, Any] = None) -> Dict[str, Any]:
     """Process an email-specific query"""
     try:
         qa_system = await get_email_qa_system()
         
         # Handle filters
-        email_filters = {}
-        if request.email_filters:
-            email_filters = request.email_filters.dict(exclude_none=True)
-        elif request.context:
-            email_filters.update(extract_time_filters(request.context.dict()))
+        filter_options = {}
+        if email_filters:
+            filter_options = {k: v for k, v in email_filters.items() if v is not None}
+        elif context:
+            filter_options.update(extract_time_filters(context))
             
         # Get answer
         answer = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: qa_system.query(
-                question=request.query,
-                filters=email_filters,
+                question=query,
+                filters=filter_options,
                 k=5
             )
         )
@@ -110,8 +114,8 @@ async def process_email_query(request: QueryRequest) -> Dict[str, Any]:
         relevant_emails = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: qa_system.get_relevant_emails(
-                query=request.query,
-                filters=email_filters,
+                query=query,
+                filters=filter_options,
                 k=3
             )
         )
@@ -145,16 +149,21 @@ def create_email_router():
     """Create and configure the email-specific router"""
     router = APIRouter(prefix="/email", tags=["email"])
     
-    @router.post("/query", response_model=EmailQueryResponse)
-    async def query_emails(request: QueryRequest):
+    @router.post("/query")
+    async def query_emails(request: Dict[str, Any]):
         """Query emails endpoint"""
-        if not request.query:
+        if not request.get("query"):
             raise HTTPException(
                 status_code=400,
                 detail="Query cannot be empty"
             )
         
-        return await process_email_query(request)
+        return await process_email_query(
+            query=request.get("query"),
+            conversation_id=request.get("conversation_id"),
+            context=request.get("context"),
+            email_filters=request.get("email_filters")
+        )
     
     @router.get("/status")
     async def email_system_status():
@@ -175,18 +184,19 @@ def create_email_router():
     
     return router
 
-def is_email_query(request: QueryRequest) -> bool:
+def is_email_query(request_data: Dict[str, Any]) -> bool:
     """Determine if a query should be routed to the email system"""
-    if request.email_filters:
+    if request_data.get("email_filters"):
         return True
         
-    if request.info_sources and any(
+    info_sources = request_data.get("info_sources", [])
+    if info_sources and any(
         source.lower() in ["emails", "email", "mail", "gmail"]
-        for source in request.info_sources
+        for source in info_sources
     ):
         return True
         
-    query = request.query.lower()
+    query = request_data.get("query", "").lower()
     email_keywords = [
         "email", "mail", "gmail", "inbox", "message",
         "received", "sent", "folder", "label"
