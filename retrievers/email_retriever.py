@@ -7,10 +7,10 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableSerializable
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import CohereRerank
 from pydantic import BaseModel, Field
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableSerializable, RunnableLambda
 
 DEFAULT_EMAIL_PROMPT_TEMPLATE = """
 You are an email assistant. Given a question, use the following email context to provide a helpful response.
@@ -95,6 +95,14 @@ class EmailFilterOptions(BaseModel):
 
 class EmailRetriever(BaseRetriever):
     """Retriever for querying embedded emails"""
+    
+    vector_store: VectorStore
+    embeddings_model: Embeddings
+    filters: Optional[EmailFilterOptions] = None
+    k: int = 5
+    search_type: str = "similarity"
+    use_reranker: bool = False
+    llm: Optional[BaseChatModel] = None
     
     def __init__(
         self,
