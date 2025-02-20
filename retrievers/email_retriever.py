@@ -126,15 +126,17 @@ class EmailRetriever(BaseRetriever):
             use_reranker: Whether to use reranking
             llm: Language model for reranking (if needed)
         """
-        super().__init__()
-        self.vector_store = vector_store
-        self.embeddings_model = embeddings_model
-        self.filters = filters
-        self.k = k
-        self.search_type = search_type
-        self.use_reranker = use_reranker
-        self.llm = llm
-    
+        # Pass all parameters to parent constructor for validation
+        super().__init__(
+            vector_store=vector_store,
+            embeddings_model=embeddings_model,
+            filters=filters,
+            k=k,
+            search_type=search_type,
+            use_reranker=use_reranker,
+            llm=llm
+        )
+        
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
