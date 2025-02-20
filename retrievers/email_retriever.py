@@ -278,10 +278,13 @@ class EmailQASystem:
                 
             # Update filters if provided
             if "filters" in inputs and inputs["filters"]:
-                self.retriever.filters = EmailFilterOptions(**inputs["filters"])
-            else:
+                try:
+                    self.retriever.filters = EmailFilterOptions(**inputs["filters"])
+                except Exception as e:
+                    print(f"Warning: Invalid filter options: {e}")
+                    self.retriever.filters = None
+            else:  # This line has incorrect indentation
                 self.retriever.filters = None
-                
             # Retrieve documents
             retrieved_docs = self.retriever.get_relevant_documents(query)
             return {
