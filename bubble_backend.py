@@ -1,17 +1,18 @@
 from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 import uvicorn
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores.pgvector import PGVector
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-from langchain.prompts import PromptTemplate
+from langchain.prompts import PromptTemplate, ChatPromptTemplate
+from langchain.schema import HumanMessage, AIMessage
 import os
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncpg
 from dotenv import load_dotenv
 import asyncio
@@ -23,6 +24,10 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from client.gmail_client import GmailClient, EmailSearchOptions
 from loaders.vector_store_loader import VectorStoreFactory
 from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
+
+# Import our custom components
+from conversation_handler import ConversationHandler, ConversationContext
+from construction_classifier import ConstructionClassifier, QuestionType
 
 # Enhanced logging
 logging.basicConfig(
@@ -53,6 +58,8 @@ SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
 # Global variables for state management
 pool: Optional[asyncpg.Pool] = None
 vector_store: Optional[PGVector] = None
+conversation_handler: Optional[ConversationHandler] = None
+classifier: Optional[ConstructionClassifier] = None
 
 # Pydantic models
 class Weather(BaseModel):
@@ -100,17 +107,24 @@ class QueryRequest(BaseModel):
             raise ValueError('Query too long (max 1000 characters)')
         return v.strip()
 
+class ResponseMetadata(BaseModel):
+    category: str
+    confidence: float
+    source_count: int
+    processing_time: float
+    conversation_context_used: bool
+
 # Startup and shutdown events manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global pool, vector_store
+    global pool, vector_store, conversation_handler, classifier
     try:
         # Initialize database pool with statement cache disabled
         pool = await asyncpg.create_pool(
             CONNECTION_STRING,
             min_size=5,
             max_size=20,
-            statement_cache_size=0  # Only use this parameter
+            statement_cache_size=0
         )
         logger.info("Database pool created successfully")
         
@@ -136,7 +150,13 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Document vector store initialized successfully")
         
-     
+        # Initialize conversation handler
+        conversation_handler = ConversationHandler(pool)
+        logger.info("Conversation handler initialized successfully")
+        
+        # Initialize classifier
+        classifier = ConstructionClassifier()
+        logger.info("Construction classifier initialized successfully")
         
     except Exception as e:
         logger.error(f"Startup error: {e}")
@@ -177,8 +197,10 @@ async def health_check():
             except Exception as e:
                 logger.warning(f"Database health check issue: {e}")
         
-        # Simple check if vector store exists (don't do operations)
+        # Check components
         vs_exists = vector_store is not None
+        ch_exists = conversation_handler is not None
+        classifier_exists = classifier is not None
             
         # Check email system status without making calls
         try:
@@ -190,13 +212,13 @@ async def health_check():
             "status": "healthy",
             "database": "connected" if db_healthy else "disconnected",
             "vector_store": "available" if vs_exists else "unavailable",
+            "conversation_handler": "available" if ch_exists else "unavailable",
+            "classifier": "available" if classifier_exists else "unavailable",
             "email_system": email_status,
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        # Still return a 200 status so the healthcheck passes
-        # Just indicate components that are unhealthy
         return {
             "status": "partial",
             "error": str(e),
@@ -206,25 +228,30 @@ async def health_check():
 class NLPTransformer:
     def __init__(self):
         self.llm = ChatOpenAI(
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4",
             temperature=0.2
         )
         
-        # Enhanced prompts with source handling
+        # Enhanced prompts with construction-specific formatting
         self.analysis_prompt = PromptTemplate(
-            template="""Analyze this content and suggest appropriate structure and formatting.
+            template="""Analyze this construction site query response and structure it appropriately.
 
             Query: {query}
+            Category: {category}
             Context: {context}
             Raw Response: {response}
             Sources: {sources}
 
-            Consider:
-            1. The natural logical flow of information
-            2. The urgency and importance of different parts
-            3. The query's intent and context
-            4. How to make the information most actionable
-            5. Which sources support which parts of the response
+            For construction workers, prioritize:
+            1. Safety information and warnings first
+            2. Clear, actionable steps
+            3. Required tools and materials
+            4. Important specifications and measurements
+            5. Relevant code requirements or regulations
+
+            If this is a safety-related query, start with explicit warnings and precautions.
+            If this is a procedure query, use clear numbered steps.
+            If this involves measurements or specifications, highlight these clearly.
 
             Response must be valid JSON matching this structure:
             {
@@ -234,33 +261,50 @@ class NLPTransformer:
                         "content": "section content",
                         "priority": priority_number,
                         "formatting": {formatting_instructions},
-                        "sources": [source_references]
+                        "sources": [source_references],
+                        "warning_level": "none|caution|warning|danger"
                     }
                 ],
                 "metadata": {
-                    additional_metadata
+                    "requires_ppe": boolean,
+                    "requires_supervision": boolean,
+                    "environmental_considerations": [conditions],
+                    "tool_requirements": [tools]
                 }
             }
             """,
-            input_variables=["query", "context", "response", "sources"]
+            input_variables=["query", "category", "context", "response", "sources"]
         )
         
         self.formatting_prompt = PromptTemplate(
-            template="""Format this content according to the provided specifications.
+            template="""Format this construction information for clear on-site use.
 
             Content: {content}
             Section Type: {section_type}
             Formatting Instructions: {formatting}
+            Warning Level: {warning_level}
 
-            Format the content to be clear and actionable while maintaining its meaning.
-            Add appropriate formatting elements (e.g., numbering, bullets, warnings).
+            Follow these guidelines:
+            - Use bullet points for lists of items
+            - Use numbered steps for procedures
+            - Add "⚠️ WARNING" prefix for any safety warnings
+            - Use clear measurements and quantities
+            - Highlight tool requirements clearly
+            - Make environmental conditions stand out
             
             Formatted Content:""",
-            input_variables=["content", "section_type", "formatting"]
+            input_variables=["content", "section_type", "formatting", "warning_level"]
         )
 
-    async def transform_content(self, query: str, raw_response: str, context: Dict, source_documents: List) -> str:
-        """Transform content using NLP-based analysis with source tracking"""
+    async def transform_content(
+        self,
+        query: str,
+        raw_response: str,
+        context: Dict,
+        source_documents: List,
+        classification: Dict
+    ) -> str:
+        """Transform content using construction-specific formatting"""
         try:
             # Format source information
             sources = []
@@ -272,9 +316,10 @@ class NLPTransformer:
                 }
                 sources.append(source_info)
 
-            # Get content analysis
+            # Get content analysis with category
             analysis_prompt = self.analysis_prompt.format(
                 query=query,
+                category=classification.get("category", "GENERAL"),
                 context=json.dumps(context),
                 response=raw_response,
                 sources=json.dumps(sources)
@@ -289,7 +334,8 @@ class NLPTransformer:
                 formatting_result = await self._format_section(
                     section["content"],
                     section["title"],
-                    section["formatting"]
+                    section["formatting"],
+                    section.get("warning_level", "none")
                 )
                 formatted_sections.append({
                     "title": section["title"],
@@ -298,8 +344,15 @@ class NLPTransformer:
                     "sources": section.get("sources", [])
                 })
             
+            # Sort sections by priority
+            formatted_sections.sort(key=lambda x: x["priority"])
+            
             # Combine sections and add source references
-            final_content = self._combine_sections_with_sources(formatted_sections, sources)
+            final_content = self._combine_sections_with_sources(
+                formatted_sections,
+                sources,
+                structured_format.get("metadata", {})
+            )
             
             return final_content
             
@@ -307,13 +360,20 @@ class NLPTransformer:
             logger.error(f"Error in content transformation: {e}")
             return raw_response
 
-    async def _format_section(self, content: str, section_type: str, formatting: Dict) -> str:
+    async def _format_section(
+        self,
+        content: str,
+        section_type: str,
+        formatting: Dict,
+        warning_level: str
+    ) -> str:
         """Format an individual section"""
         try:
             formatting_prompt = self.formatting_prompt.format(
                 content=content,
                 section_type=section_type,
-                formatting=json.dumps(formatting)
+                formatting=json.dumps(formatting),
+                warning_level=warning_level
             )
             
             formatted_content = self.llm.invoke(formatting_prompt)
@@ -323,11 +383,22 @@ class NLPTransformer:
             logger.error(f"Error formatting section {section_type}: {e}")
             return content
 
-    def _combine_sections_with_sources(self, sections: List[Dict], all_sources: List[Dict]) -> str:
+    def _combine_sections_with_sources(
+        self,
+        sections: List[Dict],
+        all_sources: List[Dict],
+        metadata: Dict
+    ) -> str:
         """Combine formatted sections and add source references"""
         try:
             combined = []
             used_sources = set()
+            
+            # Add metadata if present
+            if metadata.get("requires_ppe"):
+                combined.append("\n⚠️ PPE REQUIRED:")
+                if isinstance(metadata["requires_ppe"], list):
+                    combined.extend([f"• {ppe}" for ppe in metadata["requires_ppe"]])
             
             # Add content sections
             for section in sections:
@@ -338,6 +409,16 @@ class NLPTransformer:
                 if content:
                     combined.extend([f"\n{title}", content])
                     used_sources.update(section_sources)
+            
+            # Add environmental considerations if present
+            if metadata.get("environmental_considerations"):
+                combined.append("\nEnvironmental Considerations:")
+                combined.extend([f"• {cond}" for cond in metadata["environmental_considerations"]])
+            
+            # Add tool requirements if present
+            if metadata.get("tool_requirements"):
+                combined.append("\nRequired Tools:")
+                combined.extend([f"• {tool}" for tool in metadata["tool_requirements"]])
             
             # Add sources section if there are any sources
             if used_sources:
@@ -363,36 +444,162 @@ class NLPTransformer:
                 formatted_sources.append(source_text)
         return "\n".join(formatted_sources)
 
-# Email query handler
-async def process_email_query(request: QueryRequest) -> Dict[str, Any]:
-    """Process a query specifically for email data"""
+async def process_email_query(
+    request: QueryRequest,
+    conversation_context: Optional[Dict] = None
+) -> Dict[str, Any]:
+    """Process a query specifically for email data with conversation context"""
     try:
-        # Get answer using email adapter's process_email_query
+        # Enhance context with conversation history
+        enhanced_context = {
+            **request.context.dict(),
+            "conversation_history": conversation_context.get("chat_history", []) if conversation_context else []
+        }
+
+        # Get answer using email adapter
         response = await adapter_process_email_query(
             query=request.query,
             conversation_id=request.conversation_id,
-            context=request.context.dict(),
+            context=enhanced_context,
             email_filters=request.email_filters.dict() if request.email_filters else None
         )
         
-        # Store in database (keeping the existing database logic)
+        # Store in database with enhanced metadata
         async with pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO messages (role, content, conversation_id, metadata)
                 VALUES ($1, $2, $3, $4)
             """, 'user', request.query, request.conversation_id,
-                json.dumps({"context": request.context.dict()}))
+                json.dumps({
+                    "context": enhanced_context,
+                    "query_type": "email"
+                }))
 
             await conn.execute("""
                 INSERT INTO messages (role, content, conversation_id, metadata)
                 VALUES ($1, $2, $3, $4)
             """, 'assistant', response["answer"], request.conversation_id,
-                json.dumps({"sources": response.get("sources", [])}))
+                json.dumps({
+                    "sources": response.get("sources", []),
+                    "query_type": "email",
+                    "conversation_used": bool(conversation_context)
+                }))
         
         return response
         
     except Exception as e:
         logger.error(f"Error in email query processing: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def process_document_query(
+    request: QueryRequest,
+    conversation_context: Optional[Dict] = None
+) -> Dict[str, Any]:
+    """Enhanced document query processing with conversation context and classification"""
+    start_time = datetime.utcnow()
+    
+    if not pool or not vector_store:
+        raise HTTPException(status_code=503, detail="Service not fully initialized")
+
+    try:
+        # Get question classification
+        classification = await classifier.classify_question(
+            question=request.query,
+            conversation_context=conversation_context,
+            current_context=request.context.dict()
+        )
+        
+        # Configure search based on classification
+        search_kwargs = {"filter": {}, "k": 5}
+        if request.document_ids:
+            search_kwargs["filter"]["document_id"] = {"$in": request.document_ids}
+        if request.metadata_filter:
+            search_kwargs["filter"].update(request.metadata_filter)
+
+        # Adjust search based on classification
+        if classification.confidence > 0.7:
+            search_kwargs["k"] = 8 if classification.category == "SAFETY" else 5
+
+        # Initialize memory with conversation history
+        memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True,
+            output_key="answer"
+        )
+
+        if conversation_context and "chat_history" in conversation_context:
+            for message in conversation_context["chat_history"]:
+                if isinstance(message, dict):
+                    msg_type = HumanMessage if message.get("role") == "user" else AIMessage
+                    memory.chat_memory.add_message(msg_type(content=message.get("content", "")))
+
+        # Get retriever
+        retriever = vector_store.as_retriever(search_kwargs=search_kwargs)
+
+        # Initialize QA chain with appropriate model based on classification
+        qa = ConversationalRetrievalChain.from_llm(
+            llm=ChatOpenAI(
+                model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
+                temperature=0.7
+            ),
+            retriever=retriever,
+            memory=memory,
+            return_source_documents=True,
+            verbose=True
+        )
+
+        # Execute chain with classification context
+        chain_response = await asyncio.get_event_loop().run_in_executor(
+            None, 
+            lambda: qa({
+                "question": request.query,
+                "classification": classification.dict(),
+                "chat_history": conversation_context.get("chat_history", []) if conversation_context else []
+            })
+        )
+
+        # Process response
+        response_content = chain_response.get("answer", "No response generated")
+        source_documents = chain_response.get("source_documents", [])
+
+        # Transform content based on classification
+        transformer = NLPTransformer()
+        formatted_response = await transformer.transform_content(
+            query=request.query,
+            raw_response=response_content,
+            context=request.context.dict(),
+            source_documents=source_documents,
+            classification=classification.dict()
+        )
+
+        # Calculate processing time
+        processing_time = (datetime.utcnow() - start_time).total_seconds()
+
+        # Prepare response
+        response = {
+            "status": "success",
+            "answer": formatted_response,
+            "classification": classification.dict(),
+            "sources": [
+                {
+                    "id": doc.metadata.get("document_id"),
+                    "title": doc.metadata.get("title"),
+                    "page": doc.metadata.get("page")
+                } for doc in source_documents
+            ],
+            "metadata": ResponseMetadata(
+                category=classification.category,
+                confidence=classification.confidence,
+                source_count=len(source_documents),
+                processing_time=processing_time,
+                conversation_context_used=bool(conversation_context)
+            ).dict()
+        }
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in document query processing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 def is_email_query(request: QueryRequest) -> bool:
@@ -404,113 +611,52 @@ def is_email_query(request: QueryRequest) -> bool:
         "target_system": "email" if request.email_filters else None
     })
 
-# Document query handler (existing logic extracted to a separate function)
-async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
-    if not pool or not vector_store:
-        raise HTTPException(status_code=503, detail="Service not fully initialized")
-
-    # Configure search parameters
-    search_kwargs = {"filter": {}, "k": 5}
-    if request.document_ids:
-        search_kwargs["filter"]["document_id"] = {"$in": request.document_ids}
-    if request.metadata_filter:
-        search_kwargs["filter"].update(request.metadata_filter)
-
-    # Format context string
-    weather_str = "Unknown"
-    if request.context.weather:
-        conditions = request.context.weather.conditions or "Unknown"
-        temp = request.context.weather.temperature or "Unknown"
-        weather_str = f"{conditions}, {temp}°"
-
-    context_str = f"""Current Context:
-- Location: {request.context.location or 'Unknown'}
-- Weather: {weather_str}
-- Active Equipment: {', '.join(request.context.activeEquipment) if request.context.activeEquipment else 'None'}
-- Time: {request.context.timeOfDay or 'Unknown'}
-- Device: {request.context.deviceType or 'Unknown'}"""
-
-    # Initialize memory and retriever
-    memory = ConversationBufferMemory(
-        memory_key="chat_history",
-        return_messages=True,
-        output_key="answer"
-    )
-
-    retriever = vector_store.as_retriever(search_kwargs=search_kwargs)
-
-    # Create the chain
-    qa = ConversationalRetrievalChain.from_llm(
-        llm=ChatOpenAI(
-            model_name="gpt-3.5-turbo",
-            temperature=0.7
-        ),
-        retriever=retriever,
-        memory=memory,
-        return_source_documents=True,
-        verbose=True
-    )
-
-    # Execute the chain with simpler input structure
-    chain_response = await asyncio.get_event_loop().run_in_executor(
-        None, 
-        lambda: qa({
-            "question": request.query,
-            "chat_history": []
-        })
-    )
-
-    response_content = chain_response.get("answer", "No response generated")
-    source_documents = chain_response.get("source_documents", [])
-
-    # Transform the response
-    transformer = NLPTransformer()
-    formatted_response = await transformer.transform_content(
-        query=request.query,
-        raw_response=response_content,
-        context=request.context.dict(),
-        source_documents=source_documents
-    )
-
-    # Store in database
-    async with pool.acquire() as conn:
-        # Use simple query protocol instead of prepared statements
-        await conn.execute("""
-            INSERT INTO messages (role, content, conversation_id, metadata)
-            VALUES ($1, $2, $3, $4)
-        """, 'user', request.query, request.conversation_id,
-            json.dumps({"context": request.context.dict()}))
-
-        await conn.execute("""
-            INSERT INTO messages (role, content, conversation_id, metadata)
-            VALUES ($1, $2, $3, $4)
-        """, 'assistant', formatted_response, request.conversation_id,
-            json.dumps({}))
-
-    return {
-        "status": "success",
-        "answer": formatted_response,
-        "sources": [
-            {
-                "id": doc.metadata.get("document_id"),
-                "title": doc.metadata.get("title"),
-                "page": doc.metadata.get("page")
-            } for doc in source_documents
-        ]
-    }
-
 # Main query endpoint that routes to appropriate handler
 @app.post("/query")
 async def query_documents(request: QueryRequest):
-    """Main query endpoint that determines whether to use document or email retrieval"""
+    """Enhanced main query endpoint with conversation history and classification"""
     try:
-        # Route based on query type
+        # Load conversation history
+        conversation_context = await conversation_handler.load_conversation_history(
+            conversation_id=request.conversation_id
+        )
+        
+        # Process query with context
         if is_email_query(request):
-            logger.info(f"Routing query to email system: {request.query}")
-            return await process_email_query(request)
+            response = await process_email_query(
+                request,
+                conversation_context=conversation_context
+            )
         else:
-            logger.info(f"Routing query to document system: {request.query}")
-            return await process_document_query(request)
+            response = await process_document_query(
+                request,
+                conversation_context=conversation_context
+            )
+
+        # Save the interaction
+        await conversation_handler.save_conversation_turn(
+            conversation_id=request.conversation_id,
+            role='user',
+            content=request.query,
+            metadata={
+                "context": request.context.dict(),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+        
+        await conversation_handler.save_conversation_turn(
+            conversation_id=request.conversation_id,
+            role='assistant',
+            content=response["answer"],
+            metadata={
+                "sources": response.get("sources", []),
+                "classification": response.get("classification", {}),
+                "metadata": response.get("metadata", {}),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+        
+        return response
             
     except Exception as e:
         logger.error(f"Error in query routing: {str(e)}", exc_info=True)
