@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Body, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field, validator
 import asyncio
 import asyncpg
 import logging
@@ -20,7 +21,60 @@ from langchain.memory import ConversationBufferMemory
 from client.gmail_client import GmailClient, EmailSearchOptions
 from retrievers.email_retriever import EmailQASystem
 from email_adapter import create_email_router, get_email_qa_system, is_email_query, process_email_query
-from models.request_models import QueryRequest, SearchRequest
+
+# Define models inline instead of importing
+class Weather(BaseModel):
+    conditions: Optional[str] = None
+    temperature: Optional[float] = None
+
+    @validator('temperature')
+    def validate_temperature(cls, v):
+        if v is not None and (v < -100 or v > 100):
+            raise ValueError('Temperature must be between -100 and 100 degrees')
+        return v
+
+class QueryContext(BaseModel):
+    location: Optional[str] = None
+    weather: Optional[Weather] = None
+    activeEquipment: Optional[List[str]] = None
+    timeOfDay: Optional[str] = None
+    deviceType: Optional[str] = None
+    noiseLevel: Optional[float] = None
+    previousQueries: Optional[List[str]] = None
+    timeframe: Optional[str] = None
+
+class EmailFilter(BaseModel):
+    after_date: Optional[str] = None
+    before_date: Optional[str] = None
+    from_email: Optional[str] = None
+    to_email: Optional[str] = None
+    subject_contains: Optional[str] = None
+    has_attachment: Optional[bool] = None
+    label: Optional[str] = None
+
+class QueryRequest(BaseModel):
+    query: str
+    conversation_id: str
+    context: Optional[QueryContext] = None
+    document_ids: Optional[List[str]] = None
+    metadata_filter: Optional[Dict[str, Any]] = None
+    email_filters: Optional[EmailFilter] = None
+    info_sources: Optional[List[str]] = None
+
+    @validator('query')
+    def validate_query(cls, v):
+        if not v.strip():
+            raise ValueError('Query cannot be empty')
+        if len(v) > 1000:
+            raise ValueError('Query too long (max 1000 characters)')
+        return v.strip()
+
+class SearchRequest(BaseModel):
+    query: str
+    filters: Optional[Dict[str, Any]] = None
+    limit: Optional[int] = 10
+
+# Import the NLPTransformer module
 from utils.nlp_transformer import NLPTransformer
 
 # Enhanced logging
@@ -195,7 +249,7 @@ async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
         formatted_response = await transformer.transform_content(
             query=request.query,
             raw_response=chain_response.get("answer", "No response generated"),
-            context=request.context.dict(),
+            context=request.context.dict() if request.context else {},
             source_documents=chain_response.get("source_documents", [])
         )
 
@@ -204,7 +258,7 @@ async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
             await conn.execute(
                 "INSERT INTO messages (role, content, conversation_id, metadata) VALUES ($1, $2, $3, $4)",
                 'user', request.query, request.conversation_id,
-                json.dumps({"context": request.context.dict()})
+                json.dumps({"context": request.context.dict() if request.context else {}})
             )
             await conn.execute(
                 "INSERT INTO messages (role, content, conversation_id, metadata) VALUES ($1, $2, $3, $4)",
