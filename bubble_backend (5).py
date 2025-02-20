@@ -103,7 +103,7 @@ class QueryRequest(BaseModel):
 # Startup and shutdown events manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global pool, vector_store, email_qa_system
+    global pool, vector_store
     try:
         # Initialize database pool with statement cache disabled
         pool = await asyncpg.create_pool(
@@ -179,10 +179,10 @@ async def health_check():
             
         # Check email system status
         try:
-    await get_email_qa_system()
-    email_status = "initialized"
-except Exception:
-    email_status = "not available"
+            await get_email_qa_system()
+            email_status = "initialized"
+        except Exception:
+            email_status = "not available"
             
         return {
             "status": "healthy",
