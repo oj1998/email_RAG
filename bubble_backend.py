@@ -31,6 +31,8 @@ from conversation_handler import ConversationHandler, ConversationContext
 from construction_classifier import ConstructionClassifier, QuestionType
 
 from weighted_memory import WeightedConversationMemory
+from format_mapper import FormatMapper, CategoryFormat
+from query_intent import QueryIntentAnalyzer, QueryIntent
 
 # Enhanced logging
 logging.basicConfig(
