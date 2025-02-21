@@ -30,6 +30,8 @@ from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 from conversation_handler import ConversationHandler, ConversationContext
 from construction_classifier import ConstructionClassifier, QuestionType
 
+from weighted_memory import WeightedConversationMemory
+
 # Enhanced logging
 logging.basicConfig(
     level=logging.INFO,
@@ -396,10 +398,13 @@ async def process_document_query(
             search_kwargs["k"] = 8 if classification.category == "SAFETY" else 5
 
         # Initialize memory with conversation history
-        memory = ConversationBufferMemory(
+        memory = WeightedConversationMemory(
             memory_key="chat_history",
             return_messages=True,
-            output_key="answer"
+            output_key="answer",
+            decay_rate=0.1,
+            time_weight_factor=0.6,
+            relevance_weight_factor=0.4
         )
 
         if conversation_context and "chat_history" in conversation_context:
