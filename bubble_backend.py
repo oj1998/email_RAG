@@ -29,10 +29,9 @@ from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 # Import our custom components
 from conversation_handler import ConversationHandler, ConversationContext
 from construction_classifier import ConstructionClassifier, QuestionType
-
 from weighted_memory import WeightedConversationMemory
-from format_mapper import FormatMapper, CategoryFormat
-from query_intent import QueryIntentAnalyzer, QueryIntent
+from format_mapper import FormatMapper, CategoryFormat, SafetyLevel
+from query_intent import QueryIntentAnalyzer, QueryIntent, IntentAnalysis
 
 # Enhanced logging
 logging.basicConfig(
@@ -118,6 +117,7 @@ class ResponseMetadata(BaseModel):
     source_count: int
     processing_time: float
     conversation_context_used: bool
+    intent_analysis: Optional[Dict] = None
 
 # Part 2: FastAPI Setup and NLP Transformer
 
@@ -232,94 +232,158 @@ async def health_check():
             "timestamp": datetime.utcnow().isoformat()
         }
 
-# NLP Transformer class definition remains the same
 class NLPTransformer:
     def __init__(self):
+        self.format_mapper = FormatMapper()
+        self.intent_analyzer = QueryIntentAnalyzer()
         self.llm = ChatOpenAI(
             model_name="gpt-4",
             temperature=0.2
         )
-        
-        # Enhanced prompts with construction-specific formatting
-        self.analysis_prompt = PromptTemplate(
-            template="""Analyze this construction site query response and structure it appropriately.
 
-            Query: {query}
+    async def transform_content(
+        self, 
+        query: str,
+        raw_response: str,
+        context: Dict,
+        source_documents: List,
+        classification: Dict
+    ) -> Tuple[str, IntentAnalysis]:
+        # Analyze query intent
+        intent_analysis = self.intent_analyzer.analyze(query, context)
+        
+        # Get base category format
+        category_format = self.format_mapper.get_format_for_category(
+            classification['category']
+        )
+
+        # If it's a casual/discussion intent, use simplified format
+        if intent_analysis.primary_intent in [QueryIntent.DISCUSSION, QueryIntent.CLARIFICATION]:
+            formatted_content = await self._format_conversational(
+                raw_response,
+                classification['category'],
+                intent_analysis
+            )
+            return formatted_content, intent_analysis
+
+        # For emergency intent, always use structured safety format
+        if intent_analysis.primary_intent == QueryIntent.EMERGENCY:
+            formatted_content = await self._format_emergency(
+                raw_response,
+                classification,
+                intent_analysis
+            )
+            return formatted_content, intent_analysis
+
+        # For other cases, use standard structured format
+        formatted_content = await self._format_structured(
+            raw_response,
+            category_format,
+            classification,
+            intent_analysis
+        )
+        return formatted_content, intent_analysis
+
+    async def _format_conversational(
+        self,
+        content: str,
+        category: str,
+        intent_analysis: IntentAnalysis
+    ) -> str:
+        """Format content in a conversational style."""
+        prompt = PromptTemplate(
+            template="""Format this response conversationally while preserving key information.
+            Original content: {content}
             Category: {category}
-            Context: {context}
-            Raw Response: {response}
-            Sources: {sources}
-
-            For construction workers, prioritize:
-            1. Safety information and warnings first
-            2. Clear, actionable steps
-            3. Required tools and materials
-            4. Important specifications and measurements
-            5. Relevant code requirements or regulations
-
-            If this is a safety-related query, start with explicit warnings and precautions.
-            If this is a procedure query, use clear numbered steps.
-            If this involves measurements or specifications, highlight these clearly.
-
-            Response must be valid JSON matching this structure:
-            {
-                "sections": [
-                    {
-                        "title": "section title",
-                        "content": "section content",
-                        "priority": priority_number,
-                        "formatting": {formatting_instructions},
-                        "sources": [source_references],
-                        "warning_level": "none|caution|warning|danger"
-                    }
-                ],
-                "metadata": {
-                    "requires_ppe": boolean,
-                    "requires_supervision": boolean,
-                    "environmental_considerations": [conditions],
-                    "tool_requirements": [tools]
-                }
-            }
-            """,
-            input_variables=["query", "category", "context", "response", "sources"]
+            Intent: {intent}
+            
+            If this is safety-related, include important warnings naturally in the conversation.
+            Make it sound informal but informative.
+            
+            Response:"""
         )
         
-        self.formatting_prompt = PromptTemplate(
-            template="""Format this construction information for clear on-site use.
+        response = await self.llm.agenerate(prompt.format(
+            content=content,
+            category=category,
+            intent=intent_analysis.primary_intent.value
+        ))
+        
+        return response.generations[0].text
 
-            Content: {content}
-            Section Type: {section_type}
-            Formatting Instructions: {formatting}
-            Warning Level: {warning_level}
-
-            Follow these guidelines:
-            - Use bullet points for lists of items
-            - Use numbered steps for procedures
-            - Add "⚠️ WARNING" prefix for any safety warnings
-            - Use clear measurements and quantities
-            - Highlight tool requirements clearly
-            - Make environmental conditions stand out
-            
-            Formatted Content:""",
-            input_variables=["content", "section_type", "formatting", "warning_level"]
+    async def _format_emergency(
+        self,
+        content: str,
+        classification: Dict,
+        intent_analysis: IntentAnalysis
+    ) -> str:
+        """Format emergency content with highest priority safety formatting."""
+        # Always use safety format with emergency priority
+        safety_format = self.format_mapper.get_safety_format(
+            safety_level=SafetyLevel.CRITICAL
+        )
+        
+        return await self._format_structured(
+            content,
+            safety_format,
+            classification,
+            intent_analysis
         )
 
-    # Rest of the NLPTransformer methods remain the same
-    async def transform_content(self, query: str, raw_response: str, context: Dict, source_documents: List, classification: Dict) -> str:
-        # Implementation remains the same
-        pass
+    async def _format_structured(
+        self,
+        content: str,
+        format_spec: CategoryFormat,
+        classification: Dict,
+        intent_analysis: IntentAnalysis
+    ) -> str:
+        """Apply full structured formatting based on category and intent."""
+        # Validate content matches required sections
+        validation_errors = self.format_mapper.validate_content(
+            content,
+            classification['category']
+        )
+        
+        if validation_errors:
+            # Handle missing required sections
+            content = await self._fix_missing_sections(
+                content,
+                validation_errors,
+                format_spec
+            )
 
-    async def _format_section(self, content: str, section_type: str, formatting: Dict, warning_level: str) -> str:
-        # Implementation remains the same
-        pass
+        # Apply formatting rules
+        formatted_content = self.format_mapper.apply_formatting(
+            content,
+            classification['category'],
+            'main'  # section name
+        )
 
-    def _combine_sections_with_sources(self, sections: List[Dict], all_sources: List[Dict], metadata: Dict) -> str:
-        # Implementation remains the same
-        pass
+        return formatted_content
 
-    def _format_sources(self, used_source_ids: set, all_sources: List[Dict]) -> str:
-        # Implementation remains the same
-        pass
+    async def _fix_missing_sections(
+        self,
+        content: str,
+        validation_errors: List[str],
+        format_spec: CategoryFormat
+    ) -> str:
+        """Fix content to include missing required sections."""
+        prompt = PromptTemplate(
+            template="""Restructure this content to include missing required sections:
+            Content: {content}
+            Missing sections: {missing_sections}
+            
+            Ensure all required sections are present while preserving existing information.
+            
+            Restructured content:"""
+        )
+        
+        response = await self.llm.agenerate(prompt.format(
+            content=content,
+            missing_sections=", ".join(validation_errors)
+        ))
+        
+        return response.generations[0].text
 
 # Part 3: Query Processing and Main Endpoint
 
@@ -443,9 +507,10 @@ async def process_document_query(
         response_content = chain_response.get("answer", "No response generated")
         source_documents = chain_response.get("source_documents", [])
 
-        # Transform content based on classification
+# Transform content based on classification
         transformer = NLPTransformer()
-        formatted_response = await transformer.transform_content(
+        
+        formatted_response, intent_analysis = await transformer.transform_content(
             query=request.query,
             raw_response=response_content,
             context=request.context.dict(),
@@ -473,7 +538,8 @@ async def process_document_query(
                 confidence=classification.confidence,
                 source_count=len(source_documents),
                 processing_time=processing_time,
-                conversation_context_used=bool(conversation_context)
+                conversation_context_used=bool(conversation_context),
+                intent_analysis=intent_analysis.dict()
             ).dict()
         }
 
