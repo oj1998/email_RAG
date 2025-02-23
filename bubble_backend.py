@@ -34,6 +34,10 @@ from format_mapper import FormatMapper, CategoryFormat, SafetyLevel
 from query_intent import QueryIntentAnalyzer, QueryIntent, IntentAnalysis
 from smart_response_generator import SmartResponseGenerator
 
+import aiohttp
+import tempfile
+from langchain_community.document_loaders import PyMuPDFLoader
+
 # Enhanced logging
 logging.basicConfig(
     level=logging.INFO,
@@ -119,6 +123,20 @@ class ResponseMetadata(BaseModel):
     processing_time: float
     conversation_context_used: bool
     intent_analysis: Optional[Dict] = None
+
+
+class ProcessRequest(BaseModel):
+    document_id: str
+    file_url: str
+    metadata: Optional[Dict[str, Any]] = None
+
+    @validator('document_id')
+    def validate_document_id(cls, v):
+        if not v.strip():
+            raise ValueError('Document ID cannot be empty')
+        return v.strip()
+
+
 
 # Part 2: FastAPI Setup and NLP Transformer
 
@@ -595,6 +613,21 @@ def is_email_query(request: QueryRequest) -> bool:
         "target_system": "email" if request.email_filters else None
     })
 
+
+async def download_file(file_url: str) -> bytes:
+    """Download file from URL with improved error handling"""
+    logger.info(f"Attempting to download file from URL: {file_url}")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(file_url) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to download file. Status: {response.status}")
+                    raise HTTPException(status_code=response.status)
+                return await response.read()
+    except Exception as e:
+        logger.error(f"Error downloading file: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Main query endpoint that routes to appropriate handler
 @app.post("/query")
 async def query_documents(request: QueryRequest):
@@ -644,6 +677,71 @@ async def query_documents(request: QueryRequest):
             
     except Exception as e:
         logger.error(f"Error in query routing: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/process")
+async def process_document(request: ProcessRequest):
+    """Process a document and store its embeddings"""
+    if not vector_store:
+        raise HTTPException(status_code=503, detail="Vector store not initialized")
+
+    try:
+        # Extract filename from URL
+        filename = request.file_url.split("/")[-1]
+        
+        # Download and process file
+        file_content = await download_file(request.file_url)
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            temp_file.write(file_content)
+            temp_path = temp_file.name
+
+            try:
+                # Load and split document
+                loader = PyMuPDFLoader(temp_path)
+                documents = loader.load()
+                
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=1000,
+                    chunk_overlap=200
+                )
+                texts = text_splitter.split_documents(documents)
+
+                # Update metadata for each chunk
+                for text in texts:
+                    text.metadata.update({
+                        "document_id": request.document_id,
+                        "filename": filename,
+                        "title": filename,  # Use filename as title if not provided
+                        "upload_time": datetime.utcnow().isoformat(),
+                        **(request.metadata or {})
+                    })
+
+                # Add to vector store
+                vector_store.add_documents(texts)
+
+                # Log success
+                logger.info(f"Successfully processed document {request.document_id} with {len(texts)} chunks")
+
+                return {
+                    "status": "success",
+                    "document_id": request.document_id,
+                    "filename": filename,
+                    "chunks_processed": len(texts),
+                    "metadata": {
+                        "upload_time": datetime.utcnow().isoformat(),
+                        "chunk_size": 1000,
+                        "overlap": 200
+                    }
+                }
+
+            finally:
+                # Clean up temporary file
+                os.unlink(temp_path)
+                logger.debug(f"Cleaned up temporary file {temp_path}")
+
+    except Exception as e:
+        logger.error(f"Error processing document: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
