@@ -32,6 +32,7 @@ from construction_classifier import ConstructionClassifier, QuestionType
 from weighted_memory import WeightedConversationMemory
 from format_mapper import FormatMapper, CategoryFormat, SafetyLevel
 from query_intent import QueryIntentAnalyzer, QueryIntent, IntentAnalysis
+from smart_response_generator import SmartResponseGenerator
 
 # Enhanced logging
 logging.basicConfig(
@@ -451,6 +452,22 @@ async def process_document_query(
             conversation_context=conversation_context,
             current_context=request.context.dict()
         )
+
+        # Initialize smart response generator for source determination
+        source_handler = SmartResponseGenerator(
+            llm=ChatOpenAI(
+                model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
+                temperature=0.7
+            ),
+            vector_store=vector_store,
+            classifier=classifier
+        )
+        
+        # Check if we need sources for this query
+        needs_sources = await source_handler.should_use_sources(
+            query=request.query,
+            classification=classification
+        )
         
         # Configure search based on classification
         search_kwargs = {"filter": {}, "k": 5}
@@ -459,8 +476,8 @@ async def process_document_query(
         if request.metadata_filter:
             search_kwargs["filter"].update(request.metadata_filter)
 
-        # Adjust search based on classification
-        if classification.confidence > 0.7:
+        # Adjust search based on classification and source needs
+        if classification.confidence > 0.7 or needs_sources:
             search_kwargs["k"] = 8 if classification.category == "SAFETY" else 5
 
         # Initialize memory with conversation history
@@ -507,7 +524,7 @@ async def process_document_query(
         response_content = chain_response.get("answer", "No response generated")
         source_documents = chain_response.get("source_documents", [])
 
-# Transform content based on classification
+        # Transform content based on classification
         transformer = NLPTransformer()
         
         formatted_response, intent_analysis = await transformer.transform_content(
@@ -517,6 +534,15 @@ async def process_document_query(
             source_documents=source_documents,
             classification=classification.dict()
         )
+
+        # If we're using sources, extract smart attributions
+        source_attributions = []
+        if needs_sources and source_documents:
+            source_attributions = await source_handler._extract_attributions(
+                response_content,
+                source_documents,
+                classification
+            )
 
         # Calculate processing time
         processing_time = (datetime.utcnow() - start_time).total_seconds()
@@ -530,16 +556,27 @@ async def process_document_query(
                 {
                     "id": doc.metadata.get("document_id"),
                     "title": doc.metadata.get("title"),
-                    "page": doc.metadata.get("page")
+                    "page": doc.metadata.get("page"),
+                    "confidence": next(
+                        (attr.confidence for attr in source_attributions 
+                         if attr.source_id == doc.metadata.get("document_id")),
+                        0.0
+                    ),
+                    "excerpt": next(
+                        (attr.content for attr in source_attributions 
+                         if attr.source_id == doc.metadata.get("document_id")),
+                        None
+                    )
                 } for doc in source_documents
-            ],
+            ] if needs_sources else [],
             "metadata": ResponseMetadata(
                 category=classification.category,
                 confidence=classification.confidence,
                 source_count=len(source_documents),
                 processing_time=processing_time,
                 conversation_context_used=bool(conversation_context),
-                intent_analysis=intent_analysis.dict()
+                intent_analysis=intent_analysis.dict(),
+                needs_sources=needs_sources
             ).dict()
         }
 
