@@ -712,10 +712,11 @@ async def process_document(request: ProcessRequest):
                     text.metadata.update({
                         "document_id": request.document_id,
                         "filename": filename,
-                        "title": filename,  # Use filename as title if not provided
+                        "title": request.metadata.get("title", filename),  
                         "upload_time": datetime.utcnow().isoformat(),
                         **(request.metadata or {})
                     })
+
 
                 # Add to vector store
                 vector_store.add_documents(texts)
