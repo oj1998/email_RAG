@@ -360,52 +360,77 @@ class ProcessRequest(BaseModel):
 
 # Add the download_file helper function
 async def download_file(file_url: str) -> bytes:
-    """Download file using Supabase direct API"""
+    """Download file directly using Supabase API"""
     logger.info(f"Original file URL: {file_url}")
     
     try:
-        # Parse the file path from the URL
-        # Extract the path after 'documents/documents/'
-        if "documents/documents/" in file_url:
-            file_path = file_url.split("documents/documents/")[1]
-        else:
-            # Fallback if the URL format is different
-            file_path = file_url.split("/")[-1]
-        
-        bucket_name = "documents"
-        
-        # Construct direct Supabase API URL
+        # Get Supabase credentials
         supabase_url = os.getenv("SUPABASE_URL").rstrip("/")
-        direct_url = f"{supabase_url}/storage/v1/object/authenticated/{bucket_name}/{file_path}"
+        supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
         
-        logger.info(f"Trying direct Supabase URL: {direct_url}")
-        
+        # First, list all buckets to check what we have
+        buckets_url = f"{supabase_url}/storage/v1/bucket"
         headers = {
-            "apikey": os.getenv("SUPABASE_SERVICE_KEY"),
-            "Authorization": f"Bearer {os.getenv('SUPABASE_SERVICE_KEY')}"
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}"
         }
         
         async with aiohttp.ClientSession() as session:
-            async with session.get(direct_url, headers=headers) as response:
-                if response.status != 200:
-                    logger.error(f"Failed to download file. Status: {response.status}")
-                    error_text = await response.text()
-                    logger.error(f"Error response: {error_text}")
+            # List all buckets
+            logger.info("Listing all storage buckets")
+            async with session.get(buckets_url, headers=headers) as response:
+                if response.status == 200:
+                    buckets = await response.json()
+                    logger.info(f"Available buckets: {buckets}")
                     
-                    # If this fails, try the original URL as a fallback
-                    logger.info(f"Falling back to original URL with auth")
-                    async with session.get(file_url, headers=headers) as fallback_response:
-                        if fallback_response.status != 200:
-                            logger.error(f"Fallback also failed. Status: {fallback_response.status}")
-                            fallback_error = await fallback_response.text()
-                            logger.error(f"Fallback error: {fallback_error}")
-                            raise HTTPException(status_code=response.status)
-                        return await fallback_response.read()
-                
-                return await response.read()
+                    # Find the correct bucket name (case sensitive)
+                    bucket_names = [bucket.get('name') for bucket in buckets]
+                    
+                    if 'documents' in bucket_names:
+                        bucket_name = 'documents'
+                    elif 'Documents' in bucket_names:
+                        bucket_name = 'Documents'
+                    else:
+                        # Use the first bucket as fallback
+                        bucket_name = bucket_names[0] if bucket_names else 'documents'
+                        
+                    logger.info(f"Selected bucket: {bucket_name}")
+                    
+                    # List files in the bucket
+                    list_url = f"{supabase_url}/storage/v1/object/list/{bucket_name}"
+                    async with session.post(list_url, headers=headers) as list_response:
+                        files = await list_response.json()
+                        logger.info(f"Files in bucket: {files}")
+                        
+                        # Extract filename from original URL
+                        filename = file_url.split("/")[-1]
+                        logger.info(f"Looking for file: {filename}")
+                        
+                        # Try to download the file directly
+                        direct_url = f"{supabase_url}/storage/v1/object/{bucket_name}/{filename}"
+                        logger.info(f"Trying direct URL: {direct_url}")
+                        
+                        async with session.get(direct_url, headers=headers) as file_response:
+                            if file_response.status == 200:
+                                return await file_response.read()
+                            else:
+                                error_text = await file_response.text()
+                                logger.error(f"Failed to get file. Status: {file_response.status}, Error: {error_text}")
+                                raise HTTPException(
+                                    status_code=file_response.status, 
+                                    detail=f"Failed to download file: {error_text}"
+                                )
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Failed to list buckets. Status: {response.status}, Error: {error_text}")
+                    raise HTTPException(
+                        status_code=response.status, 
+                        detail=f"Failed to list storage buckets: {error_text}"
+                    )
+                    
     except Exception as e:
         logger.error(f"Error downloading file: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Document download failed: {str(e)}")
 
 # Add the document processing endpoint
 @app.post("/process")
