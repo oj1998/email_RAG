@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import numpy as np
 from langchain.schema import BaseMessage
+from langchain.memory import ConversationBufferMemory
 
 class WeightedConversationMemory(ConversationBufferMemory):
     def __init__(
