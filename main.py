@@ -152,7 +152,7 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI
 app = FastAPI(lifespan=lifespan)
 
-app.include_router(create_document_router())
+app.post("/process")(process_document) 
 
 # Add CORS middleware
 app.add_middleware(
