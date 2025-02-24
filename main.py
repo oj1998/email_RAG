@@ -360,72 +360,116 @@ class ProcessRequest(BaseModel):
 
 # Add the download_file helper function
 async def download_file(file_url: str) -> bytes:
-    """Download file from URL with robust error handling for both direct URLs and Supabase storage"""
+    """Download file from URL with support for Supabase signed URLs and fallbacks"""
     logger.info(f"Attempting to download file from URL: {file_url}")
     
+    # First, try the URL as-is (for signed URLs)
     try:
-        # First try the simple direct download approach from the working code
         async with aiohttp.ClientSession() as session:
             async with session.get(file_url) as response:
                 if response.status == 200:
-                    logger.info(f"Successfully downloaded file directly from URL: {file_url}")
+                    logger.info(f"Successfully downloaded file directly from URL")
                     return await response.read()
                 else:
-                    logger.warning(f"Direct download failed. Status: {response.status}. Trying Supabase storage approach...")
-        
-        # If direct download fails, try the Supabase storage approach
-        supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-        supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")
-        
-        if not supabase_url or not supabase_key:
-            raise HTTPException(
-                status_code=500,
-                detail="Supabase configuration missing. Check SUPABASE_URL and SUPABASE_SERVICE_KEY."
-            )
-        
-        # Extract filename from URL
-        filename = file_url.split("/")[-1]
-        
-        # Try multiple bucket configurations
-        buckets = ["documents", "storage", ""]  # Empty string for no bucket prefix
-        
-        headers = {
-            "apikey": supabase_key,
-            "Authorization": f"Bearer {supabase_key}"
-        }
-        
-        for bucket in buckets:
-            bucket_prefix = f"{bucket}/" if bucket else ""
-            # Try both public and authenticated access
-            for access_type in ["public", "authenticated"]:
-                download_url = f"{supabase_url}/storage/v1/object/{access_type}/{bucket_prefix}{filename}"
-                
-                logger.info(f"Trying Supabase URL: {download_url}")
-                
-                async with aiohttp.ClientSession() as session:
-                    try:
-                        async with session.get(download_url, headers=headers) as response:
-                            if response.status == 200:
-                                logger.info(f"Successfully downloaded from Supabase using URL: {download_url}")
-                                return await response.read()
-                            else:
-                                error_text = await response.text()
-                                logger.warning(f"Failed to download from {download_url}. Status: {response.status}, Error: {error_text}")
-                    except Exception as e:
-                        logger.warning(f"Exception trying Supabase URL {download_url}: {str(e)}")
-        
-        # If we've tried everything and still failed, raise an error
-        logger.error("All download attempts failed")
-        raise HTTPException(
-            status_code=400,
-            detail="Failed to download file after multiple attempts. Check file URL and Supabase configuration."
-        )
-            
-    except HTTPException:
-        raise
+                    error_text = await response.text()
+                    logger.warning(f"Direct download failed. Status: {response.status}, Error: {error_text}")
+                    
+                    # Special handling for expired signed URLs
+                    if "token" in file_url and (response.status == 401 or response.status == 403):
+                        logger.warning("The signed URL appears to have expired")
     except Exception as e:
-        logger.error(f"Error downloading file: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Document download failed: {str(e)}")
+        logger.warning(f"Exception in direct download: {str(e)}")
+    
+    # If direct download fails, extract filename for fallback approaches
+    # Handle URLs with query parameters (like signed URLs)
+    filename = file_url.split("/")[-1].split("?")[0]  # Remove query parameters
+    logger.info(f"Attempting fallback approaches for file: {filename}")
+    
+    # Try fallback approaches with Supabase
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    
+    if not supabase_url or not supabase_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase configuration missing for fallback approaches."
+        )
+    
+    # Try multiple bucket configurations as fallbacks
+    buckets = ["documents", "storage", ""]  # Empty string for no bucket prefix
+    
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}"
+    }
+    
+    # First try the common path pattern we've seen in your URL
+    if "/documents/documents/" in file_url:
+        bucket_path = "documents/documents"
+        for access_type in ["public", "authenticated"]:
+            download_url = f"{supabase_url}/storage/v1/object/{access_type}/{bucket_path}/{filename}"
+            
+            logger.info(f"Trying specific bucket path URL: {download_url}")
+            
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(download_url, headers=headers) as response:
+                        if response.status == 200:
+                            logger.info(f"Successfully downloaded using specific bucket path: {download_url}")
+                            return await response.read()
+                        else:
+                            error_text = await response.text()
+                            logger.warning(f"Failed specific path download from {download_url}. Status: {response.status}")
+            except Exception as e:
+                logger.warning(f"Exception trying specific path URL {download_url}: {str(e)}")
+    
+    # Try other bucket combinations
+    for bucket in buckets:
+        bucket_prefix = f"{bucket}/" if bucket else ""
+        for access_type in ["public", "authenticated"]:
+            download_url = f"{supabase_url}/storage/v1/object/{access_type}/{bucket_prefix}{filename}"
+            
+            logger.info(f"Trying fallback Supabase URL: {download_url}")
+            
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(download_url, headers=headers) as response:
+                        if response.status == 200:
+                            logger.info(f"Successfully downloaded using fallback URL: {download_url}")
+                            return await response.read()
+                        else:
+                            error_text = await response.text()
+                            logger.warning(f"Failed fallback download from {download_url}. Status: {response.status}")
+            except Exception as e:
+                logger.warning(f"Exception trying fallback URL {download_url}: {str(e)}")
+    
+    # If we've come this far, try one more approach: reconstructing the signed URL path
+    if "/sign/" in file_url:
+        # Extract the bucket and path from the signed URL
+        parts = file_url.split("/storage/v1/object/sign/")[1].split("?")[0]
+        for access_type in ["public", "authenticated"]:
+            download_url = f"{supabase_url}/storage/v1/object/{access_type}/{parts}"
+            
+            logger.info(f"Trying reconstructed URL: {download_url}")
+            
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(download_url, headers=headers) as response:
+                        if response.status == 200:
+                            logger.info(f"Successfully downloaded using reconstructed URL: {download_url}")
+                            return await response.read()
+                        else:
+                            error_text = await response.text()
+                            logger.warning(f"Failed reconstructed download from {download_url}. Status: {response.status}")
+            except Exception as e:
+                logger.warning(f"Exception trying reconstructed URL {download_url}: {str(e)}")
+    
+    # If all attempts fail, raise an error
+    logger.error("All download attempts failed")
+    raise HTTPException(
+        status_code=400,
+        detail="Failed to download file after multiple attempts. The URL may be invalid or expired."
+    )
 
 # Add the document processing endpoint
 @app.post("/process")
