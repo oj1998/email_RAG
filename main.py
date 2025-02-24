@@ -360,7 +360,7 @@ class ProcessRequest(BaseModel):
 
 # Add the download_file helper function
 async def download_file(file_url: str) -> bytes:
-    """Download file directly using Supabase API"""
+    """Download file directly from Supabase with path correction"""
     logger.info(f"Original file URL: {file_url}")
     
     try:
@@ -368,66 +368,60 @@ async def download_file(file_url: str) -> bytes:
         supabase_url = os.getenv("SUPABASE_URL").rstrip("/")
         supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
         
-        # First, list all buckets to check what we have
-        buckets_url = f"{supabase_url}/storage/v1/bucket"
+        # Attempt to extract the filename and path
+        filename = file_url.split("/")[-1]
+        
+        # For the case where files are in a documents/documents/ nested structure
+        if "documents/documents/" in file_url:
+            logger.info("Detected nested document path structure")
+            file_path = f"documents/{filename}"
+        else:
+            file_path = filename
+            
+        logger.info(f"Using file_path: {file_path}")
+        
+        # Create full download URL that uses the Supabase API directly
+        download_url = f"{supabase_url}/storage/v1/object/public/documents/{file_path}"
+        
+        logger.info(f"Trying direct download URL: {download_url}")
+        
         headers = {
             "apikey": supabase_key,
             "Authorization": f"Bearer {supabase_key}"
         }
         
         async with aiohttp.ClientSession() as session:
-            # List all buckets
-            logger.info("Listing all storage buckets")
-            async with session.get(buckets_url, headers=headers) as response:
+            async with session.get(download_url, headers=headers) as response:
                 if response.status == 200:
-                    buckets = await response.json()
-                    logger.info(f"Available buckets: {buckets}")
-                    
-                    # Find the correct bucket name (case sensitive)
-                    bucket_names = [bucket.get('name') for bucket in buckets]
-                    
-                    if 'documents' in bucket_names:
-                        bucket_name = 'documents'
-                    elif 'Documents' in bucket_names:
-                        bucket_name = 'Documents'
-                    else:
-                        # Use the first bucket as fallback
-                        bucket_name = bucket_names[0] if bucket_names else 'documents'
-                        
-                    logger.info(f"Selected bucket: {bucket_name}")
-                    
-                    # List files in the bucket
-                    list_url = f"{supabase_url}/storage/v1/object/list/{bucket_name}"
-                    async with session.post(list_url, headers=headers) as list_response:
-                        files = await list_response.json()
-                        logger.info(f"Files in bucket: {files}")
-                        
-                        # Extract filename from original URL
-                        filename = file_url.split("/")[-1]
-                        logger.info(f"Looking for file: {filename}")
-                        
-                        # Try to download the file directly
-                        direct_url = f"{supabase_url}/storage/v1/object/{bucket_name}/{filename}"
-                        logger.info(f"Trying direct URL: {direct_url}")
-                        
-                        async with session.get(direct_url, headers=headers) as file_response:
-                            if file_response.status == 200:
-                                return await file_response.read()
-                            else:
-                                error_text = await file_response.text()
-                                logger.error(f"Failed to get file. Status: {file_response.status}, Error: {error_text}")
-                                raise HTTPException(
-                                    status_code=file_response.status, 
-                                    detail=f"Failed to download file: {error_text}"
-                                )
+                    return await response.read()
                 else:
                     error_text = await response.text()
-                    logger.error(f"Failed to list buckets. Status: {response.status}, Error: {error_text}")
-                    raise HTTPException(
-                        status_code=response.status, 
-                        detail=f"Failed to list storage buckets: {error_text}"
-                    )
+                    logger.error(f"Failed to download from {download_url}. Status: {response.status}, Error: {error_text}")
                     
+                    # Try alternative path structures
+                    alternative_paths = [
+                        f"{supabase_url}/storage/v1/object/public/documents/{filename}",
+                        f"{supabase_url}/storage/v1/object/authenticated/documents/{filename}",
+                        file_url  # Original URL as fallback
+                    ]
+                    
+                    for alt_url in alternative_paths:
+                        logger.info(f"Trying alternative URL: {alt_url}")
+                        async with session.get(alt_url, headers=headers) as alt_response:
+                            if alt_response.status == 200:
+                                logger.info(f"Success with alternative URL: {alt_url}")
+                                return await alt_response.read()
+                            else:
+                                alt_error = await alt_response.text()
+                                logger.error(f"Failed with alternative URL {alt_url}. Status: {alt_response.status}, Error: {alt_error}")
+                    
+                    # If all attempts fail, raise exception with the original error
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Failed to download file: {error_text}"
+                    )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error downloading file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Document download failed: {str(e)}")
