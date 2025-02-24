@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import numpy as np
-from typing import List
+from typing import List, Tuple
 from langchain.schema import BaseMessage
 from langchain.memory import ConversationBufferMemory
 
