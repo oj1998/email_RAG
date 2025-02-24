@@ -360,13 +360,21 @@ class ProcessRequest(BaseModel):
 
 # Add the download_file helper function
 async def download_file(file_url: str) -> bytes:
-    """Download file from URL with improved error handling"""
+    """Download file from URL with Supabase authentication"""
     logger.info(f"Attempting to download file from URL: {file_url}")
     try:
+        # Add Supabase authentication headers
+        headers = {
+            "apikey": os.getenv("SUPABASE_SERVICE_KEY"),
+            "Authorization": f"Bearer {os.getenv('SUPABASE_SERVICE_KEY')}"
+        }
+        
         async with aiohttp.ClientSession() as session:
-            async with session.get(file_url) as response:
+            async with session.get(file_url, headers=headers) as response:
                 if response.status != 200:
                     logger.error(f"Failed to download file. Status: {response.status}")
+                    error_text = await response.text()
+                    logger.error(f"Error response: {error_text}")
                     raise HTTPException(status_code=response.status)
                 return await response.read()
     except Exception as e:
