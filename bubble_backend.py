@@ -37,6 +37,7 @@ from smart_response_generator import SmartResponseGenerator
 import aiohttp
 import tempfile
 from langchain_community.document_loaders import PyMuPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # Enhanced logging
 logging.basicConfig(
