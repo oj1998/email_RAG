@@ -9,7 +9,29 @@ class FormatStyle(Enum):
     SPECIFICATION = "specification"
     NARRATIVE = "narrative"
 
-# [Previous FormatMapper code here]
+class CategoryFormat(BaseModel):
+    style: FormatStyle
+    required_sections: Optional[List[str]] = None
+    formatting_rules: Optional[Dict[str, str]] = None
+    validation_rules: Optional[Dict[str, str]] = None
+
+class FormatMapper:
+    def __init__(self):
+        # Initialize with default formatting rules
+        pass
+
+    def get_format_for_category(self, category: str) -> CategoryFormat:
+        # Return appropriate format for the category
+        return CategoryFormat(
+            style=FormatStyle.NARRATIVE,  # default style
+            required_sections=[],
+            formatting_rules={},
+            validation_rules={}
+        )
+
+    def apply_formatting(self, content: str, format_spec: CategoryFormat, classification: Dict) -> str:
+        # Apply formatting rules
+        return content
 
 # query_intent.py
 from enum import Enum
@@ -22,11 +44,6 @@ class QueryIntent(Enum):
     CLARIFICATION = "clarification"
     DISCUSSION = "discussion"
 
-class CategoryFormat(BaseModel):
-    style: FormatStyle
-    required_sections: Optional[List[str]] = None
-    formatting_rules: Optional[Dict[str, str]] = None
-    validation_rules: Optional[Dict[str, str]] = None
 
 class QueryIntentAnalyzer:
     def __init__(self):
