@@ -21,7 +21,12 @@ from langchain.memory import ConversationBufferMemory
 from client.gmail_client import GmailClient, EmailSearchOptions
 from retrievers.email_retriever import EmailQASystem
 from email_adapter import create_email_router, get_email_qa_system, is_email_query, process_email_query
-from bubble_backend import process_document  
+
+import aiohttp
+import tempfile
+from langchain_community.document_loaders import PyMuPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 
 # Define models inline instead of importing
 class Weather(BaseModel):
@@ -153,7 +158,6 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI
 app = FastAPI(lifespan=lifespan)
 
-app.post("/process")(process_document) 
 
 # Add CORS middleware
 app.add_middleware(
@@ -341,6 +345,115 @@ async def query_endpoint(request: QueryRequest):
     except Exception as e:
         logger.error(f"Error in query routing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+# Add the ProcessRequest model if it's not already in main.py
+class ProcessRequest(BaseModel):
+    document_id: str
+    file_url: str
+    metadata: Optional[Dict[str, Any]] = None
+
+    @validator('document_id')
+    def validate_document_id(cls, v):
+        if not v.strip():
+            raise ValueError('Document ID cannot be empty')
+        return v.strip()
+
+# Add the download_file helper function
+async def download_file(file_url: str) -> bytes:
+    """Download file from URL with improved error handling"""
+    logger.info(f"Attempting to download file from URL: {file_url}")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(file_url) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to download file. Status: {response.status}")
+                    raise HTTPException(status_code=response.status)
+                return await response.read()
+    except Exception as e:
+        logger.error(f"Error downloading file: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Add the document processing endpoint
+@app.post("/process")
+async def process_document(request: ProcessRequest):
+    """Process a document and store its embeddings"""
+    global vector_store  # Use the vector_store from main.py
+    
+    if not vector_store:
+        logger.error("Vector store not initialized during document processing attempt")
+        raise HTTPException(
+            status_code=503, 
+            detail="Vector store not initialized. Please wait for system startup to complete and try again."
+        )
+
+    try:
+        # Extract filename from URL
+        filename = request.file_url.split("/")[-1]
+        
+        # Download and process file
+        logger.info(f"Starting processing of document: {filename}")
+        file_content = await download_file(request.file_url)
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            temp_file.write(file_content)
+            temp_path = temp_file.name
+
+            try:
+                # Load and split document
+                loader = PyMuPDFLoader(temp_path)
+                documents = loader.load()
+                
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=1000,
+                    chunk_overlap=200
+                )
+                texts = text_splitter.split_documents(documents)
+
+                # Update metadata for each chunk
+                for text in texts:
+                    text.metadata.update({
+                        "document_id": request.document_id,
+                        "filename": filename,
+                        "title": request.metadata.get("title", filename),  
+                        "upload_time": datetime.utcnow().isoformat(),
+                        **(request.metadata or {})
+                    })
+
+                # Add to vector store with explicit error handling
+                try:
+                    vector_store.add_documents(texts)
+                except Exception as e:
+                    logger.error(f"Failed to add documents to vector store: {str(e)}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to store document vectors: {str(e)}"
+                    )
+
+                # Log success
+                logger.info(f"Successfully processed document {request.document_id} with {len(texts)} chunks")
+
+                return {
+                    "status": "success",
+                    "document_id": request.document_id,
+                    "filename": filename,
+                    "chunks_processed": len(texts),
+                    "metadata": {
+                        "upload_time": datetime.utcnow().isoformat(),
+                        "chunk_size": 1000,
+                        "overlap": 200
+                    }
+                }
+
+            finally:
+                # Clean up temporary file
+                os.unlink(temp_path)
+                logger.debug(f"Cleaned up temporary file {temp_path}")
+
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except Exception as e:
+        logger.error(f"Error processing document: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Document processing failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
