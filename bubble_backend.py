@@ -147,6 +147,7 @@ async def lifespan(app: FastAPI):
     global pool, vector_store, conversation_handler, classifier
     try:
         # Initialize database pool with statement cache disabled
+        logger.info("Initializing database pool...")
         pool = await asyncpg.create_pool(
             CONNECTION_STRING,
             min_size=5,
@@ -157,6 +158,7 @@ async def lifespan(app: FastAPI):
         
         # Verify/create database tables
         async with pool.acquire() as conn:
+            logger.info("Verifying database tables...")
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id SERIAL PRIMARY KEY,
@@ -167,15 +169,25 @@ async def lifespan(app: FastAPI):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-        logger.info("Database tables verified/created successfully")
+            # Add verification for pgvector extension
+            await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+            logger.info("Database tables verified/created successfully")
         
-        # Initialize vector store for documents
-        vector_store = PGVector(
-            collection_name="document_embeddings",
-            connection_string=CONNECTION_STRING,
-            embedding_function=OpenAIEmbeddings()
-        )
-        logger.info("Document vector store initialized successfully")
+        # Initialize vector store for documents with better error handling
+        logger.info("Initializing vector store...")
+        try:
+            vector_store = PGVector(
+                collection_name="document_embeddings",
+                connection_string=CONNECTION_STRING,
+                embedding_function=OpenAIEmbeddings()
+            )
+            logger.info("Document vector store initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize vector store: {str(e)}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Vector store initialization failed: {str(e)}"
+            )
         
         # Initialize conversation handler
         conversation_handler = ConversationHandler(pool)
@@ -186,7 +198,7 @@ async def lifespan(app: FastAPI):
         logger.info("Construction classifier initialized successfully")
         
     except Exception as e:
-        logger.error(f"Startup error: {e}")
+        logger.error(f"Startup error: {str(e)}")
         raise
     
     yield
@@ -339,9 +351,7 @@ class NLPTransformer:
     ) -> str:
         """Format emergency content with highest priority safety formatting."""
         # Always use safety format with emergency priority
-        safety_format = self.format_mapper.get_safety_format(
-            safety_level=SafetyLevel.CRITICAL
-        )
+        safety_format = self.format_mapper.get_format_for_category("SAFETY")
         
         return await self._format_structured(
             content,
@@ -683,14 +693,21 @@ async def query_documents(request: QueryRequest):
 @app.post("/process")
 async def process_document(request: ProcessRequest):
     """Process a document and store its embeddings"""
+    global vector_store  # Make it explicit we're using the global instance
+    
     if not vector_store:
-        raise HTTPException(status_code=503, detail="Vector store not initialized")
+        logger.error("Vector store not initialized during document processing attempt")
+        raise HTTPException(
+            status_code=503, 
+            detail="Vector store not initialized. Please wait for system startup to complete and try again."
+        )
 
     try:
         # Extract filename from URL
         filename = request.file_url.split("/")[-1]
         
         # Download and process file
+        logger.info(f"Starting processing of document: {filename}")
         file_content = await download_file(request.file_url)
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
@@ -718,9 +735,15 @@ async def process_document(request: ProcessRequest):
                         **(request.metadata or {})
                     })
 
-
-                # Add to vector store
-                vector_store.add_documents(texts)
+                # Add to vector store with explicit error handling
+                try:
+                    vector_store.add_documents(texts)
+                except Exception as e:
+                    logger.error(f"Failed to add documents to vector store: {str(e)}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to store document vectors: {str(e)}"
+                    )
 
                 # Log success
                 logger.info(f"Successfully processed document {request.document_id} with {len(texts)} chunks")
@@ -742,9 +765,11 @@ async def process_document(request: ProcessRequest):
                 os.unlink(temp_path)
                 logger.debug(f"Cleaned up temporary file {temp_path}")
 
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
-        logger.error(f"Error processing document: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error processing document: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Document processing failed: {str(e)}")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
