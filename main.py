@@ -360,22 +360,48 @@ class ProcessRequest(BaseModel):
 
 # Add the download_file helper function
 async def download_file(file_url: str) -> bytes:
-    """Download file from URL with Supabase authentication"""
-    logger.info(f"Attempting to download file from URL: {file_url}")
+    """Download file using Supabase direct API"""
+    logger.info(f"Original file URL: {file_url}")
+    
     try:
-        # Add Supabase authentication headers
+        # Parse the file path from the URL
+        # Extract the path after 'documents/documents/'
+        if "documents/documents/" in file_url:
+            file_path = file_url.split("documents/documents/")[1]
+        else:
+            # Fallback if the URL format is different
+            file_path = file_url.split("/")[-1]
+        
+        bucket_name = "documents"
+        
+        # Construct direct Supabase API URL
+        supabase_url = os.getenv("SUPABASE_URL").rstrip("/")
+        direct_url = f"{supabase_url}/storage/v1/object/authenticated/{bucket_name}/{file_path}"
+        
+        logger.info(f"Trying direct Supabase URL: {direct_url}")
+        
         headers = {
             "apikey": os.getenv("SUPABASE_SERVICE_KEY"),
             "Authorization": f"Bearer {os.getenv('SUPABASE_SERVICE_KEY')}"
         }
         
         async with aiohttp.ClientSession() as session:
-            async with session.get(file_url, headers=headers) as response:
+            async with session.get(direct_url, headers=headers) as response:
                 if response.status != 200:
                     logger.error(f"Failed to download file. Status: {response.status}")
                     error_text = await response.text()
                     logger.error(f"Error response: {error_text}")
-                    raise HTTPException(status_code=response.status)
+                    
+                    # If this fails, try the original URL as a fallback
+                    logger.info(f"Falling back to original URL with auth")
+                    async with session.get(file_url, headers=headers) as fallback_response:
+                        if fallback_response.status != 200:
+                            logger.error(f"Fallback also failed. Status: {fallback_response.status}")
+                            fallback_error = await fallback_response.text()
+                            logger.error(f"Fallback error: {fallback_error}")
+                            raise HTTPException(status_code=response.status)
+                        return await fallback_response.read()
+                
                 return await response.read()
     except Exception as e:
         logger.error(f"Error downloading file: {str(e)}")
