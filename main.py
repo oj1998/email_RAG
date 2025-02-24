@@ -21,6 +21,7 @@ from langchain.memory import ConversationBufferMemory
 from client.gmail_client import GmailClient, EmailSearchOptions
 from retrievers.email_retriever import EmailQASystem
 from email_adapter import create_email_router, get_email_qa_system, is_email_query, process_email_query
+from bubble_backend import process_document  
 
 # Define models inline instead of importing
 class Weather(BaseModel):
