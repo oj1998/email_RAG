@@ -1,6 +1,7 @@
 # Web Framework
 fastapi
 uvicorn[standard]
+tenacity
 
 # Data Processing & ML
 pandas
