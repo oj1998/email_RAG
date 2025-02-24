@@ -360,66 +360,67 @@ class ProcessRequest(BaseModel):
 
 # Add the download_file helper function
 async def download_file(file_url: str) -> bytes:
-    """Download file directly from Supabase with path correction"""
-    logger.info(f"Original file URL: {file_url}")
+    """Download file from URL with robust error handling for both direct URLs and Supabase storage"""
+    logger.info(f"Attempting to download file from URL: {file_url}")
     
     try:
-        # Get Supabase credentials
-        supabase_url = os.getenv("SUPABASE_URL").rstrip("/")
-        supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
+        # First try the simple direct download approach from the working code
+        async with aiohttp.ClientSession() as session:
+            async with session.get(file_url) as response:
+                if response.status == 200:
+                    logger.info(f"Successfully downloaded file directly from URL: {file_url}")
+                    return await response.read()
+                else:
+                    logger.warning(f"Direct download failed. Status: {response.status}. Trying Supabase storage approach...")
         
-        # Attempt to extract the filename and path
+        # If direct download fails, try the Supabase storage approach
+        supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+        supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+        
+        if not supabase_url or not supabase_key:
+            raise HTTPException(
+                status_code=500,
+                detail="Supabase configuration missing. Check SUPABASE_URL and SUPABASE_SERVICE_KEY."
+            )
+        
+        # Extract filename from URL
         filename = file_url.split("/")[-1]
         
-        # For the case where files are in a documents/documents/ nested structure
-        if "documents/documents/" in file_url:
-            logger.info("Detected nested document path structure")
-            file_path = f"documents/{filename}"
-        else:
-            file_path = filename
-            
-        logger.info(f"Using file_path: {file_path}")
-        
-        # Create full download URL that uses the Supabase API directly
-        download_url = f"{supabase_url}/storage/v1/object/public/documents/{file_path}"
-        
-        logger.info(f"Trying direct download URL: {download_url}")
+        # Try multiple bucket configurations
+        buckets = ["documents", "storage", ""]  # Empty string for no bucket prefix
         
         headers = {
             "apikey": supabase_key,
             "Authorization": f"Bearer {supabase_key}"
         }
         
-        async with aiohttp.ClientSession() as session:
-            async with session.get(download_url, headers=headers) as response:
-                if response.status == 200:
-                    return await response.read()
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Failed to download from {download_url}. Status: {response.status}, Error: {error_text}")
-                    
-                    # Try alternative path structures
-                    alternative_paths = [
-                        f"{supabase_url}/storage/v1/object/public/documents/{filename}",
-                        f"{supabase_url}/storage/v1/object/authenticated/documents/{filename}",
-                        file_url  # Original URL as fallback
-                    ]
-                    
-                    for alt_url in alternative_paths:
-                        logger.info(f"Trying alternative URL: {alt_url}")
-                        async with session.get(alt_url, headers=headers) as alt_response:
-                            if alt_response.status == 200:
-                                logger.info(f"Success with alternative URL: {alt_url}")
-                                return await alt_response.read()
+        for bucket in buckets:
+            bucket_prefix = f"{bucket}/" if bucket else ""
+            # Try both public and authenticated access
+            for access_type in ["public", "authenticated"]:
+                download_url = f"{supabase_url}/storage/v1/object/{access_type}/{bucket_prefix}{filename}"
+                
+                logger.info(f"Trying Supabase URL: {download_url}")
+                
+                async with aiohttp.ClientSession() as session:
+                    try:
+                        async with session.get(download_url, headers=headers) as response:
+                            if response.status == 200:
+                                logger.info(f"Successfully downloaded from Supabase using URL: {download_url}")
+                                return await response.read()
                             else:
-                                alt_error = await alt_response.text()
-                                logger.error(f"Failed with alternative URL {alt_url}. Status: {alt_response.status}, Error: {alt_error}")
-                    
-                    # If all attempts fail, raise exception with the original error
-                    raise HTTPException(
-                        status_code=400, 
-                        detail=f"Failed to download file: {error_text}"
-                    )
+                                error_text = await response.text()
+                                logger.warning(f"Failed to download from {download_url}. Status: {response.status}, Error: {error_text}")
+                    except Exception as e:
+                        logger.warning(f"Exception trying Supabase URL {download_url}: {str(e)}")
+        
+        # If we've tried everything and still failed, raise an error
+        logger.error("All download attempts failed")
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to download file after multiple attempts. Check file URL and Supabase configuration."
+        )
+            
     except HTTPException:
         raise
     except Exception as e:
