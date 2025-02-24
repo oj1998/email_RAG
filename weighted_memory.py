@@ -3,6 +3,7 @@ import numpy as np
 from typing import List, Tuple
 from langchain.schema import BaseMessage
 from langchain.memory import ConversationBufferMemory
+from langchain_openai import OpenAIEmbeddings
 
 class WeightedConversationMemory(ConversationBufferMemory):
     def __init__(
