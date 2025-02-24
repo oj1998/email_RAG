@@ -30,7 +30,7 @@ from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 from conversation_handler import ConversationHandler, ConversationContext
 from construction_classifier import ConstructionClassifier, QuestionType
 from weighted_memory import WeightedConversationMemory
-from format_mapper import FormatMapper, CategoryFormat, SafetyLevel
+from format_mapper import FormatMapper, CategoryFormat
 from query_intent import QueryIntentAnalyzer, QueryIntent, IntentAnalysis
 from smart_response_generator import SmartResponseGenerator
 
