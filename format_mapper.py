@@ -22,6 +22,12 @@ class QueryIntent(Enum):
     CLARIFICATION = "clarification"
     DISCUSSION = "discussion"
 
+class CategoryFormat(BaseModel):
+    style: FormatStyle
+    required_sections: Optional[List[str]] = None
+    formatting_rules: Optional[Dict[str, str]] = None
+    validation_rules: Optional[Dict[str, str]] = None
+
 class QueryIntentAnalyzer:
     def __init__(self):
         self.intent_patterns = {
