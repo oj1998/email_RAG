@@ -1,6 +1,6 @@
 # Web Framework
 fastapi
-uvicorn
+uvicorn[standard]
 
 # Data Processing & ML
 pandas
@@ -9,6 +9,8 @@ scipy
 scikit-learn
 spacy
 en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+torch
+transformers
 
 # Database and Vector Storage
 pgvector
@@ -22,6 +24,7 @@ sqlalchemy
 langchain
 langchain-community
 langchain-openai
+openai
 huggingface-hub
 sentence-transformers
 
@@ -43,7 +46,6 @@ python-json-logger
 typing-extensions
 pydantic
 aiohttp
-asyncio
 
 # Local Package
 -e .
