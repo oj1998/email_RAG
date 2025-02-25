@@ -26,6 +26,7 @@ import aiohttp
 import tempfile
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from bubble_backend import query_router, initialize_components
 
 
 # Define models inline instead of importing
@@ -145,6 +146,10 @@ async def lifespan(app: FastAPI):
         # Initialize email QA system
         email_qa_system = await get_email_qa_system()
         
+        # Initialize bubble_backend components
+        bubble_components = await initialize_components()
+        logger.info("Bubble backend components initialized successfully")
+        
         yield
         
     except Exception as e:
@@ -170,6 +175,8 @@ app.add_middleware(
 
 # Include email router
 app.include_router(create_email_router())
+
+app.include_router(query_router)
 
 @app.get("/health")
 async def health_check():
@@ -308,122 +315,6 @@ async def extract_source_attributions(response_content, source_documents):
     # Sort by confidence
     return sorted(attributions, key=lambda x: x["confidence"], reverse=True)
 
-
-async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
-    """Process queries for document retrieval"""
-    if not pool or not vector_store:
-        raise HTTPException(status_code=503, detail="Service not fully initialized")
-
-    try:
-        # Configure search
-        search_kwargs = {"filter": {}, "k": 5}
-        if request.document_ids:
-            search_kwargs["filter"]["document_id"] = {"$in": request.document_ids}
-        if request.metadata_filter:
-            search_kwargs["filter"].update(request.metadata_filter)
-
-        # Set up retrieval chain
-        memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True,
-            output_key="answer"
-        )
-        retriever = vector_store.as_retriever(search_kwargs=search_kwargs)
-        qa = ConversationalRetrievalChain.from_llm(
-            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.7),
-            retriever=retriever,
-            memory=memory,
-            return_source_documents=True
-        )
-
-        # Execute query
-        chain_response = await asyncio.get_event_loop().run_in_executor(
-            None, 
-            lambda: qa({"question": request.query, "chat_history": []})
-        )
-
-        # Get response and sources
-        response_content = chain_response.get("answer", "No response generated")
-        source_documents = chain_response.get("source_documents", [])
-        
-        # Extract source attributions with confidence scores
-        source_attributions = await extract_source_attributions(response_content, source_documents)
-        
-        # Format response with sources
-        if source_documents:
-            sources_text = format_sources(source_documents)
-            formatted_response = f"{response_content}\n\nSources:\n{sources_text}"
-        else:
-            formatted_response = response_content
-
-        # Store in database
-        async with pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO messages (role, content, conversation_id, metadata) VALUES ($1, $2, $3, $4)",
-                'user', request.query, request.conversation_id,
-                json.dumps({"context": request.context.dict() if request.context else {}})
-            )
-            await conn.execute(
-                "INSERT INTO messages (role, content, conversation_id, metadata) VALUES ($1, $2, $3, $4)",
-                'assistant', formatted_response, request.conversation_id,
-                json.dumps({})
-            )
-
-        # Structure the response to match frontend expectations
-        return {
-            "status": "success",
-            "answer": formatted_response,
-            "sources": [
-                {
-                    "id": doc.metadata.get("document_id"),
-                    "title": doc.metadata.get("title", "Unknown Document"),
-                    "page": doc.metadata.get("page", 0),
-                    "confidence": next(
-                        (attr["confidence"] for attr in source_attributions 
-                         if attr["source_id"] == doc.metadata.get("document_id")),
-                        0.5  # Default confidence
-                    ),
-                    "excerpt": next(
-                        (attr["content"] for attr in source_attributions 
-                         if attr["source_id"] == doc.metadata.get("document_id")),
-                        None
-                    )
-                } for doc in source_documents
-            ]
-        }
-
-    except Exception as e:
-        logger.error(f"Error in document query processing: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/query")
-async def query_endpoint(request: QueryRequest):
-    """Main query endpoint that routes to appropriate handler"""
-    try:
-        # Convert Pydantic model to dictionary for email adapter functions
-        request_dict = {
-            "query": request.query,
-            "conversation_id": request.conversation_id,
-            "context": request.context.dict() if request.context else {},
-            "email_filters": request.email_filters.dict() if request.email_filters else None,
-            "info_sources": request.info_sources
-        }
-        
-        if email_qa_system and (request.email_filters or is_email_query(request_dict)):
-            logger.info(f"Routing to email system: {request.query}")
-            email_result = await process_email_query(
-                query=request.query,
-                conversation_id=request.conversation_id,
-                context=request.context.dict() if request.context else {},
-                email_filters=request.email_filters.dict() if request.email_filters else None
-            )
-            return email_result
-        else:
-            logger.info(f"Routing to document system: {request.query}")
-            return await process_document_query(request)
-    except Exception as e:
-        logger.error(f"Error in query routing: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
 
 # Add the ProcessRequest model if it's not already in main.py
 class ProcessRequest(BaseModel):
