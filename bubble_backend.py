@@ -320,31 +320,55 @@ class NLPTransformer:
         return formatted_content, intent_analysis
 
     async def _format_conversational(
-        self,
-        content: str,
-        category: str,
-        intent_analysis: IntentAnalysis
-    ) -> str:
-        """Format content in a conversational style."""
-        prompt = PromptTemplate(
-            template="""Format this response conversationally while preserving key information.
-            Original content: {content}
-            Category: {category}
-            Intent: {intent}
-            
-            If this is safety-related, include important warnings naturally in the conversation.
-            Make it sound informal but informative.
-            
-            Response:"""
-        )
+    self,
+    content: str,
+    category: str,
+    intent_analysis: IntentAnalysis
+) -> str:
+    """Format content in a conversational style."""
+    prompt = PromptTemplate(
+        template="""Format this response conversationally while preserving key information.
+        Original content: {content}
+        Category: {category}
+        Intent: {intent}
         
-        response = await self.llm.agenerate(prompt.format(
-            content=content,
-            category=category,
-            intent=intent_analysis.primary_intent.value
-        ))
+        If this is safety-related, include important warnings naturally in the conversation.
+        Make it sound informal but informative.
         
-        return response.generations[0].text
+        Response:"""
+    )
+    
+    response = await self.llm.agenerate([prompt.format(
+        content=content,
+        category=category,
+        intent=intent_analysis.primary_intent.value
+    )])
+    
+    # Check if response is a list or has generations attribute
+    if hasattr(response, 'generations') and response.generations:
+        # Handle LangChain >= 0.0.267 response format
+        if hasattr(response.generations[0][0], 'text'):
+            return response.generations[0][0].text
+        elif hasattr(response.generations[0][0], 'content'):
+            return response.generations[0][0].content
+        elif isinstance(response.generations[0][0], str):
+            return response.generations[0][0]
+    
+    # Handle direct string response or older versions
+    if isinstance(response, str):
+        return response
+    
+    # Handle list response directly
+    if isinstance(response, list) and response:
+        if isinstance(response[0], str):
+            return response[0]
+        elif hasattr(response[0], 'text'):
+            return response[0].text
+        elif hasattr(response[0], 'content'):
+            return response[0].content
+    
+    # Fallback
+    return content
 
     async def _format_emergency(
         self,
@@ -395,28 +419,52 @@ class NLPTransformer:
         return formatted_content
 
     async def _fix_missing_sections(
-        self,
-        content: str,
-        validation_errors: List[str],
-        format_spec: CategoryFormat
-    ) -> str:
-        """Fix content to include missing required sections."""
-        prompt = PromptTemplate(
-            template="""Restructure this content to include missing required sections:
-            Content: {content}
-            Missing sections: {missing_sections}
-            
-            Ensure all required sections are present while preserving existing information.
-            
-            Restructured content:"""
-        )
+    self,
+    content: str,
+    validation_errors: List[str],
+    format_spec: CategoryFormat
+) -> str:
+    """Fix content to include missing required sections."""
+    prompt = PromptTemplate(
+        template="""Restructure this content to include missing required sections:
+        Content: {content}
+        Missing sections: {missing_sections}
         
-        response = await self.llm.agenerate(prompt.format(
-            content=content,
-            missing_sections=", ".join(validation_errors)
-        ))
+        Ensure all required sections are present while preserving existing information.
         
-        return response.generations[0].text
+        Restructured content:"""
+    )
+    
+    response = await self.llm.agenerate(prompt.format(
+        content=content,
+        missing_sections=", ".join(validation_errors)
+    ))
+    
+    # Check if response is a list or has generations attribute
+    if hasattr(response, 'generations') and response.generations:
+        # Handle LangChain >= 0.0.267 response format
+        if hasattr(response.generations[0][0], 'text'):
+            return response.generations[0][0].text
+        elif hasattr(response.generations[0][0], 'content'):
+            return response.generations[0][0].content
+        elif isinstance(response.generations[0][0], str):
+            return response.generations[0][0]
+    
+    # Handle direct string response or older versions
+    if isinstance(response, str):
+        return response
+    
+    # Handle list response directly
+    if isinstance(response, list) and response:
+        if isinstance(response[0], str):
+            return response[0]
+        elif hasattr(response[0], 'text'):
+            return response[0].text
+        elif hasattr(response[0], 'content'):
+            return response[0].content
+    
+    # Fallback
+    return content
 
 # Part 3: Query Processing and Main Endpoint
 
