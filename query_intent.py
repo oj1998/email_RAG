@@ -195,29 +195,45 @@ class QueryIntentAnalyzer:
         Adjust intent scores based on context.
         """
         adjusted = scores.copy()
-
+        
         # Time pressure adjustment
         if context.get('timeOfDay'):
-            time_now = datetime.strptime(context['timeOfDay'], "%H:%M").time()
-            if time_now.hour in [7, 8, 16, 17]:  # Start/end of typical shift
-                adjusted[QueryIntent.CLARIFICATION] *= 1.2
-
+            time_of_day = context['timeOfDay'].lower() if isinstance(context['timeOfDay'], str) else str(context['timeOfDay'])
+            
+            # Handle text-based time descriptions
+            if time_of_day in ['morning', 'afternoon', 'evening', 'night']:
+                # Apply shift-based logic for morning and afternoon/evening
+                if time_of_day in ['morning']:
+                    adjusted[QueryIntent.CLARIFICATION] *= 1.2  # Start of shift
+                elif time_of_day in ['afternoon', 'evening']:
+                    adjusted[QueryIntent.CLARIFICATION] *= 1.2  # End of shift
+            else:
+                # Try to parse as HH:MM format
+                try:
+                    time_now = datetime.strptime(time_of_day, "%H:%M").time()
+                    if time_now.hour in [7, 8, 16, 17]:  # Start/end of typical shift
+                        adjusted[QueryIntent.CLARIFICATION] *= 1.2
+                except ValueError:
+                    # If parsing fails, don't adjust based on time
+                    pass
+                
         # Equipment context
         if context.get('activeEquipment'):
             adjusted[QueryIntent.INSTRUCTION] *= 1.1
             if any(equip in ['crane', 'excavator', 'heavyMachinery'] 
                   for equip in context['activeEquipment']):
                 adjusted[QueryIntent.EMERGENCY] *= 1.2
-
+                
         # Weather conditions
-        if context.get('weather', {}).get('conditions') in ['rain', 'snow', 'storm']:
-            adjusted[QueryIntent.INSTRUCTION] *= 1.2
-            adjusted[QueryIntent.EMERGENCY] *= 1.1
-
+        if context.get('weather') and isinstance(context['weather'], dict):
+            if context['weather'].get('conditions') in ['rain', 'snow', 'storm']:
+                adjusted[QueryIntent.INSTRUCTION] *= 1.2
+                adjusted[QueryIntent.EMERGENCY] *= 1.1
+                
         # Noise level context
         if context.get('noiseLevel', 0) > 80:  # High noise environment
             adjusted[QueryIntent.CLARIFICATION] *= 0.8  # Less likely to be casual
-
+            
         return adjusted
 
     def _determine_intents(
