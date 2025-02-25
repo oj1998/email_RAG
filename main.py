@@ -244,6 +244,71 @@ async def oauth2callback(code: str, state: Optional[str] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+async def extract_source_attributions(response_content, source_documents):
+    """
+    Extract source attributions with confidence scores and relevant excerpts
+    from the document sources that contributed to the response.
+    """
+    attributions = []
+    
+    for doc in source_documents:
+        # Extract document content
+        doc_content = doc.page_content if hasattr(doc, 'page_content') else ""
+        
+        # Skip empty documents
+        if not doc_content:
+            continue
+            
+        # Calculate relevance based on content overlap
+        response_lower = response_content.lower()
+        doc_lower = doc_content.lower()
+        
+        # Simple relevance: Calculate word overlap
+        response_words = set(w for w in response_lower.split() if len(w) > 3)
+        doc_words = set(w for w in doc_lower.split() if len(w) > 3)
+        
+        if not response_words:
+            confidence = 0.5  # Default if no significant words in response
+        else:
+            overlap_count = len(response_words.intersection(doc_words))
+            # Calculate confidence (basic implementation)
+            confidence = min(0.95, max(0.3, overlap_count / (len(response_words) + 1)))
+        
+        # Find most relevant excerpt (simple implementation)
+        # Look for sentences or paragraphs that contain the most overlapping words
+        excerpt = doc_content[:200] + "..." if len(doc_content) > 200 else doc_content
+        
+        # Try to find a better excerpt by splitting into paragraphs
+        paragraphs = [p.strip() for p in doc_content.split('\n\n') if p.strip()]
+        if paragraphs:
+            # Score each paragraph by word overlap
+            para_scores = []
+            for i, para in enumerate(paragraphs):
+                para_words = set(w for w in para.lower().split() if len(w) > 3)
+                overlap = len(para_words.intersection(response_words))
+                score = overlap / (len(para_words) + 1) if para_words else 0
+                para_scores.append((score, i, para))
+            
+            # Use the highest scoring paragraph as excerpt
+            if para_scores:
+                para_scores.sort(reverse=True)
+                best_para = para_scores[0][2]
+                if len(best_para) > 220:
+                    excerpt = best_para[:220] + "..."
+                else:
+                    excerpt = best_para
+        
+        attributions.append({
+            "source_id": doc.metadata.get("document_id"),
+            "confidence": round(confidence, 2),
+            "content": excerpt
+        })
+    
+    # Sort by confidence
+    return sorted(attributions, key=lambda x: x["confidence"], reverse=True)
+
+
 async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
     """Process queries for document retrieval"""
     if not pool or not vector_store:
@@ -281,6 +346,9 @@ async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
         response_content = chain_response.get("answer", "No response generated")
         source_documents = chain_response.get("source_documents", [])
         
+        # Extract source attributions with confidence scores
+        source_attributions = await extract_source_attributions(response_content, source_documents)
+        
         # Format response with sources
         if source_documents:
             sources_text = format_sources(source_documents)
@@ -301,14 +369,25 @@ async def process_document_query(request: QueryRequest) -> Dict[str, Any]:
                 json.dumps({})
             )
 
+        # Structure the response to match frontend expectations
         return {
             "status": "success",
             "answer": formatted_response,
             "sources": [
                 {
                     "id": doc.metadata.get("document_id"),
-                    "title": doc.metadata.get("title"),
-                    "page": doc.metadata.get("page")
+                    "title": doc.metadata.get("title", "Unknown Document"),
+                    "page": doc.metadata.get("page", 0),
+                    "confidence": next(
+                        (attr["confidence"] for attr in source_attributions 
+                         if attr["source_id"] == doc.metadata.get("document_id")),
+                        0.5  # Default confidence
+                    ),
+                    "excerpt": next(
+                        (attr["content"] for attr in source_attributions 
+                         if attr["source_id"] == doc.metadata.get("document_id")),
+                        None
+                    )
                 } for doc in source_documents
             ]
         }
@@ -474,8 +553,8 @@ async def download_file(file_url: str) -> bytes:
 # Add the document processing endpoint
 @app.post("/process")
 async def process_document(request: ProcessRequest):
-    """Process a document and store its embeddings"""
-    global vector_store  # Use the vector_store from main.py
+    """Process a document and store its embeddings with enhanced metadata"""
+    global vector_store
     
     if not vector_store:
         logger.error("Vector store not initialized during document processing attempt")
@@ -501,19 +580,54 @@ async def process_document(request: ProcessRequest):
                 loader = PyMuPDFLoader(temp_path)
                 documents = loader.load()
                 
+                # Enhanced document title logic
+                title = request.metadata.get("title", "")
+                if not title.strip():
+                    # Extract title from filename by removing the extension and replacing underscores/hyphens
+                    title = filename.split('.')[0].replace('_', ' ').replace('-', ' ').title()
+                    # If title is still empty or just numbers, provide a fallback title
+                    if not title.strip() or title.strip().isdigit():
+                        title = f"Document {request.document_id}"
+                
+                # Get document creation date if available
+                creation_date = None
+                try:
+                    if hasattr(documents[0], "metadata") and "creationDate" in documents[0].metadata:
+                        creation_date = documents[0].metadata["creationDate"]
+                except (IndexError, AttributeError, KeyError):
+                    pass  # No creation date available
+                
                 text_splitter = RecursiveCharacterTextSplitter(
                     chunk_size=1000,
                     chunk_overlap=200
                 )
                 texts = text_splitter.split_documents(documents)
 
-                # Update metadata for each chunk
-                for text in texts:
+                # Calculate total pages
+                total_pages = max([doc.metadata.get("page", 0) for doc in documents], default=0) + 1
+                
+                # Log document info
+                logger.info(f"Document '{title}' has {total_pages} pages, split into {len(texts)} chunks")
+
+                # Update metadata for each chunk with enhanced information
+                for i, text in enumerate(texts):
+                    # Determine page number, defaulting to chunk index if not available
+                    page_number = text.metadata.get("page", i)
+                    
+                    # Enhanced metadata with more useful fields
                     text.metadata.update({
                         "document_id": request.document_id,
                         "filename": filename,
-                        "title": request.metadata.get("title", filename),  
+                        "title": title,
+                        "page": page_number,
+                        "total_pages": total_pages,
+                        "chunk_index": i,
+                        "total_chunks": len(texts),
+                        "document_type": request.metadata.get("document_type", "Unknown"),
+                        "description": request.metadata.get("description", ""),
                         "upload_time": datetime.utcnow().isoformat(),
+                        "creation_date": creation_date,
+                        "content_length": len(text.page_content) if hasattr(text, "page_content") else 0,
                         **(request.metadata or {})
                     })
 
@@ -534,9 +648,14 @@ async def process_document(request: ProcessRequest):
                     "status": "success",
                     "document_id": request.document_id,
                     "filename": filename,
+                    "title": title,
                     "chunks_processed": len(texts),
+                    "total_pages": total_pages,
                     "metadata": {
+                        "document_type": request.metadata.get("document_type", "Unknown"),
+                        "description": request.metadata.get("description", ""),
                         "upload_time": datetime.utcnow().isoformat(),
+                        "creation_date": creation_date,
                         "chunk_size": 1000,
                         "overlap": 200
                     }
