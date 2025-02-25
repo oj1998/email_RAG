@@ -38,6 +38,9 @@ import aiohttp
 import tempfile
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from fastapi import APIRouter
+
+query_router = APIRouter()
 
 # Enhanced logging
 logging.basicConfig(
@@ -640,7 +643,7 @@ async def download_file(file_url: str) -> bytes:
         raise HTTPException(status_code=500, detail=str(e))
 
 # Main query endpoint that routes to appropriate handler
-@app.post("/query")
+@query_router.post("/query")
 async def query_documents(request: QueryRequest):
     """Enhanced main query endpoint with conversation history and classification"""
     try:
@@ -689,6 +692,45 @@ async def query_documents(request: QueryRequest):
     except Exception as e:
         logger.error(f"Error in query routing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+async def initialize_components():
+    """Initialize all components needed for the query endpoint"""
+    global pool, vector_store, conversation_handler, classifier
+    
+    # Initialize database pool
+    pool = await asyncpg.create_pool(
+        CONNECTION_STRING,
+        min_size=5,
+        max_size=20,
+        statement_cache_size=0
+    )
+    
+    # Initialize vector store
+    vector_store = PGVector(
+        collection_name="document_embeddings",
+        connection_string=CONNECTION_STRING,
+        embedding_function=OpenAIEmbeddings()
+    )
+    
+    # Initialize conversation handler
+    conversation_handler = ConversationHandler(pool)
+    
+    # Initialize classifier
+    classifier = ConstructionClassifier()
+    
+    return {
+        "pool": pool,
+        "vector_store": vector_store,
+        "conversation_handler": conversation_handler,
+        "classifier": classifier
+    }
+
+# Keep the standalone app definition for direct usage
+app = FastAPI(lifespan=lifespan)
+app.include_router(query_router)
+
+# Export the router for use in other files
+__all__ = ['query_router', 'initialize_components', 'process_document_query', 'process_email_query', 'process_document']
 
 @app.post("/process")
 async def process_document(request: ProcessRequest):
@@ -774,5 +816,3 @@ async def process_document(request: ProcessRequest):
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run("bubble_backend:app", host="0.0.0.0", port=port, reload=True)
-
-__all__ = ['process_document']
