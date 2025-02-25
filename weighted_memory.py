@@ -55,16 +55,14 @@ class WeightedConversationMemory(ConversationBufferMemory):
         return [msg for msg, _ in filtered_messages]
 
     def _apply_token_limit(self, weighted_messages: List[Tuple[BaseMessage, float]]) -> List[Tuple[BaseMessage, float]]:
-        total_tokens = 0
-        filtered_messages = []
-
-        for msg, weight in weighted_messages:
-            # Rough token estimation
-            estimated_tokens = len(msg.content.split()) * 1.3
-            if total_tokens + estimated_tokens <= self.max_token_limit:
-                filtered_messages.append((msg, weight))
-                total_tokens += estimated_tokens
-            else:
-                break
-
-        return filtered_messages
+    total_tokens = 0
+    filtered_messages = []
+    for msg, weight in weighted_messages:
+        # Rough token estimation
+        estimated_tokens = len(msg.content.split()) * 1.3
+        if total_tokens + estimated_tokens <= self.max_token_limit:
+            filtered_messages.append((msg, weight))
+            total_tokens += estimated_tokens
+        else:
+            break
+    return filtered_messages
