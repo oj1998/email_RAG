@@ -31,7 +31,7 @@ from conversation_handler import ConversationHandler, ConversationContext
 from construction_classifier import ConstructionClassifier, QuestionType
 from weighted_memory import WeightedConversationMemory
 from format_mapper import FormatMapper, CategoryFormat
-from query_intent import QueryIntentAnalyzer, QueryIntent, IntentAnalysis
+from query_intent import SmartQueryIntentAnalyzer, QueryIntent, IntentAnalysis
 from smart_response_generator import SmartResponseGenerator
 
 import aiohttp
@@ -270,7 +270,7 @@ async def health_check():
 class NLPTransformer:
     def __init__(self):
         self.format_mapper = FormatMapper()
-        self.intent_analyzer = QueryIntentAnalyzer()
+        self.intent_analyzer = SmartQueryIntentAnalyzer()
         self.llm = ChatOpenAI(
             model_name="gpt-4",
             temperature=0.2
