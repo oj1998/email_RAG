@@ -70,24 +70,30 @@ class SmartResponseGenerator:
     ) -> bool:
         """Determine if the query requires source retrieval"""
         
-        # Always use sources for safety questions
-        if classification.category == "SAFETY":
-            return True
-            
-        # Check confidence for other categories
-        response = await self.llm.ainvoke(
-            self.source_check_prompt.format_messages(
-                query=query,
-                category=classification.category
-            )
-        )
+        # Short, simple responses that don't need sources
+        if len(query.strip()) < 15:  # Very short queries
+            return False
         
-        try:
-            confidence = float(response.content.strip())
-            return confidence > 0.7 or classification.confidence > 0.8
-        except ValueError:
-            logger.error("Error parsing source check response")
-            return True  # Default to using sources on error
+        # Categories that don't need sources
+        no_source_categories = ["GREETING", "CLARIFICATION", "SMALL_TALK", "ACKNOWLEDGMENT"]
+        if classification.category in no_source_categories:
+            return False
+            
+        # For everything else, use a simple check for very basic responses
+        if len(query.split()) <= 5:  # Queries with 5 or fewer words
+            response = await self.llm.ainvoke(
+                ChatPromptTemplate.from_messages([
+                    ("system", """Determine if this is a simple question requiring only a yes/no or very basic response.
+                    Output ONLY 'BASIC' or 'COMPLEX'."""),
+                    ("user", query)
+                ]).format_messages()
+            )
+            
+            if "BASIC" in response.content.upper():
+                return False
+        
+        # Default to using sources for everything else
+        return True
 
     async def generate_response(
         self,
