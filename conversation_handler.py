@@ -98,19 +98,42 @@ class ConversationHandler:
         """Save a new conversation turn"""
         try:
             async with self.pool.acquire() as conn:
+                # Make metadata JSON serializable
+                if metadata:
+                    metadata = self._make_json_serializable(metadata)
+                
                 await conn.execute("""
                     INSERT INTO messages (role, content, conversation_id, metadata, created_at)
                     VALUES ($1, $2, $3, $4, NOW())
                 """, role, content, conversation_id, json.dumps(metadata) if metadata else None)
-
+    
                 # Update conversation-specific memory
                 memory = self._get_or_create_memory(conversation_id)
                 message = HumanMessage(content=content) if role == 'user' else AIMessage(content=content)
                 memory.chat_memory.add_message(message)
-
+    
         except Exception as e:
             logger.error(f"Error saving conversation turn: {e}")
             raise
+            
+    def _make_json_serializable(self, obj):
+        """Convert non-serializable objects to serializable ones."""
+        if isinstance(obj, dict):
+            return {k: self._make_json_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._make_json_serializable(item) for item in obj]
+        elif hasattr(obj, 'dict') and callable(obj.dict):
+            # Handle Pydantic models or classes with dict() method
+            return self._make_json_serializable(obj.dict())
+        elif hasattr(obj, 'value'):
+            # Handle Enum objects
+            return obj.value
+        elif hasattr(obj, '__dict__'):
+            # Handle custom classes
+            return self._make_json_serializable(obj.__dict__)
+        else:
+            # Return primitive types as is
+            return obj
 
     async def _generate_conversation_summary(
         self, 
