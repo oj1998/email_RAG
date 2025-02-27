@@ -228,6 +228,7 @@ class SmartQueryIntentAnalyzer:
         reasoning = self._get_reasoning(llm_analysis, primary_intent, query)
         
         # Create and return the analysis
+        logger.info(f"Intent analysis complete - Primary: {primary_intent.value}, Confidence: {confidence:.2f}, Urgency: {urgency}")
         return IntentAnalysis(
             primary_intent=primary_intent,
             secondary_intent=secondary_intent,
@@ -383,7 +384,8 @@ class SmartQueryIntentAnalyzer:
         emergency_terms = ["emergency", "urgent", "immediately", "danger", "accident", "injured", "fire", "now"]
         if any(term in query.lower() for term in emergency_terms):
             combined_scores[QueryIntent.EMERGENCY] = max(combined_scores[QueryIntent.EMERGENCY], 0.7)
-        
+            
+        logger.debug(f"Combined scores: {combined_scores}")
         return combined_scores
 
     def _adjust_for_context(
@@ -439,7 +441,8 @@ class SmartQueryIntentAnalyzer:
             if any(any(kw in prev.lower() for kw in instruction_keywords) 
                   for prev in context['previousQueries'][-3:]):
                 adjusted[QueryIntent.INSTRUCTION] *= 1.1
-                
+
+        logger.debug(f"Context-adjusted scores: {adjusted}")
         return adjusted
 
     def _determine_intents(
@@ -461,6 +464,7 @@ class SmartQueryIntentAnalyzer:
             if sorted_intents[1][1] / sorted_intents[0][1] > 0.6:  # At least 60% as strong
                 secondary = sorted_intents[1][0]
                 
+        logger.debug(f"Selected primary intent: {primary}, secondary intent: {secondary}")        
         return primary, secondary
 
     def _calculate_confidence(
