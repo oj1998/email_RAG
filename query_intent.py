@@ -281,15 +281,10 @@ class SmartQueryIntentAnalyzer:
             - DISCUSSION: User wants to engage in casual inquiry or conversation
             - EMERGENCY: User has an urgent or immediate need
             
-            Return a JSON with:
-            {
-              "intent": "PRIMARY_INTENT",
-              "secondary_intent": "SECONDARY_INTENT", 
-              "confidence": 0.0-1.0,
-              "urgency": 1-5,
-              "reasoning": "Brief explanation of why this intent was chosen"
-            }
+            Return a JSON object with EXACTLY this format:
+            {"intent": "PRIMARY_INTENT", "secondary_intent": "SECONDARY_INTENT", "confidence": 0.8, "urgency": 3, "reasoning": "Brief explanation"}
             
+            Use only lowercase for intent values. Do not include any explanation or text outside the JSON object.
             Be decisive in your classification and provide clear reasoning.
             """),
             ("user", """Query: {query}
@@ -308,7 +303,30 @@ class SmartQueryIntentAnalyzer:
         # Parse the JSON response
         import json
         try:
-            result = json.loads(response.content)
+            # Clean the response content to handle potential formatting issues
+            content = response.content.strip()
+            
+            # Handle cases where the model includes markdown code blocks
+            if content.startswith("```json"):
+                content = content.split("```json")[1]
+            if content.endswith("```"):
+                content = content.split("```")[0]
+                
+            # Further cleanup for any remaining non-JSON text
+            content = content.strip()
+            
+            # Look for the JSON object - find the first '{' and last '}'
+            start = content.find('{')
+            end = content.rfind('}')
+            
+            if start != -1 and end != -1 and end > start:
+                content = content[start:end+1]
+            
+            # Log the content for debugging
+            logger.debug(f"Attempting to parse JSON: {content}")
+            
+            result = json.loads(content)
+            
             # Validate and standardize the response
             if "intent" not in result:
                 raise ValueError("Missing intent in LLM response")
@@ -329,8 +347,16 @@ class SmartQueryIntentAnalyzer:
                     
             return result
         except Exception as e:
-            logger.warning(f"Failed to parse LLM response: {e}")
-            return {}
+            logger.warning(f"LLM analysis failed: {str(e)}")
+            
+            # Provide a default fallback response
+            return {
+                "intent": QueryIntent.INFORMATION,
+                "secondary_intent": None,
+                "confidence": 0.5,
+                "urgency": 1,
+                "reasoning": "Fallback due to parsing error"
+            }
 
     def _combine_scores(
         self, 
