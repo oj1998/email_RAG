@@ -142,20 +142,24 @@ class FormatMapper:
             
         return format_spec
 
-    def validate_content(self, content: str, format_spec: Optional[CategoryFormat] = None, 
+    def validate_content(self, content: str, format_spec_or_category: Optional[Union[CategoryFormat, str]] = None, 
                         category: Optional[str] = None) -> List[str]:
         """
         Validate that the content contains all required sections.
         Returns a list of missing section names, or an empty list if all required sections are present.
         """
-        # If no format_spec provided, try to get one from category
+        # Handle the case where a string (category) is passed instead of a CategoryFormat
+        if isinstance(format_spec_or_category, str):
+            format_spec = self.get_format_for_category(format_spec_or_category)
+        else:
+            format_spec = format_spec_or_category
+            
+        # If no format_spec provided, try to get one from category parameter
         if not format_spec and category:
             format_spec = self.get_format_for_category(category)
-            
-        if not format_spec or not format_spec.required_sections:
-            return []  # No validation needed
         
-        missing_sections = []
+    if not format_spec or not hasattr(format_spec, 'required_sections') or not format_spec.required_sections:
+        return []  # No validation needed
         
         # Check for required sections using regex to be more flexible with formatting
         for section in format_spec.required_sections:
