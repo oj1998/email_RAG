@@ -283,10 +283,19 @@ class SmartQueryIntentAnalyzer:
             - DISCUSSION: User wants to engage in casual inquiry or conversation
             - EMERGENCY: User has an urgent or immediate need
             
-            Return ONLY a valid JSON object with EXACTLY this format:
-            {"intent": "intent_value", "secondary_intent": "secondary_intent_value", "confidence": 0.8, "urgency": 3, "reasoning": "Brief explanation"}
+            IMPORTANT: You MUST respond ONLY with a valid JSON object in exactly this format:
+            {
+                "intent": "intent_value",
+                "secondary_intent": "secondary_intent_value", 
+                "confidence": 0.8,
+                "urgency": 3,
+                "reasoning": "Brief explanation"
+            }
             
-            Use only lowercase for intent values. The "intent" must be one of: "instruction", "information", "clarification", "discussion", or "emergency".
+            - Use only lowercase for intent values
+            - The "intent" must be one of: "instruction", "information", "clarification", "discussion", or "emergency"
+            - "secondary_intent" can be null
+            - Do not include any other text, comments, or explanations outside this JSON
             """),
             ("user", """Query: {query}
             
@@ -302,8 +311,20 @@ class SmartQueryIntentAnalyzer:
                 )
             )
             
-            # Parse the JSON response directly like in ConstructionClassifier
-            result = json.loads(response.content)
+            # Clean and extract valid JSON
+            content = response.content.strip()
+            # Try to find JSON content (between curly braces)
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                content = json_match.group(0)
+            
+            # Parse the JSON response
+            try:
+                result = json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON parsing error: {e}, response: {content}")
+                raise ValueError(f"Failed to parse LLM response as JSON")
             
             # Validate required fields
             if "intent" not in result:
@@ -317,22 +338,15 @@ class SmartQueryIntentAnalyzer:
                 result["intent"] = QueryIntent.INFORMATION
                 
             # Convert secondary intent if present
-            if result.get("secondary_intent"):
+            if result.get("secondary_intent") and result["secondary_intent"] != "null":
                 try:
                     result["secondary_intent"] = QueryIntent(result["secondary_intent"].lower())
                 except (ValueError, KeyError):
                     result["secondary_intent"] = None
+            else:
+                result["secondary_intent"] = None
                     
             return result
-        except json.JSONDecodeError as e:
-            logger.warning(f"JSON parsing error: {e}, response: {response.content}")
-            return {
-                "intent": QueryIntent.INFORMATION,
-                "secondary_intent": None,
-                "confidence": 0.5,
-                "urgency": 1,
-                "reasoning": f"Fallback due to JSON parsing error"
-            }
         except Exception as e:
             logger.warning(f"LLM analysis failed: {str(e)}")
             return {
