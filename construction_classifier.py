@@ -57,10 +57,18 @@ class ConstructionClassifier:
         current_context: Optional[Dict] = None
     ) -> QuestionType:
         try:
+            # Convert ConversationContext to dict if needed
+            if conversation_context and hasattr(conversation_context, 'dict'):
+                context_dict = conversation_context.dict()
+            elif conversation_context and isinstance(conversation_context, dict):
+                context_dict = conversation_context
+            else:
+                context_dict = None
+                
             # Format the prompt with all context
             prompt = self.base_prompt.format_messages(
                 question=question,
-                conversation_context=json.dumps(conversation_context) if conversation_context else "None",
+                conversation_context=json.dumps(context_dict) if context_dict else "None",
                 current_context=json.dumps(current_context) if current_context else "None"
             )
             
