@@ -158,8 +158,8 @@ class FormatMapper:
         if not format_spec and category:
             format_spec = self.get_format_for_category(category)
         
-    if not format_spec or not hasattr(format_spec, 'required_sections') or not format_spec.required_sections:
-        return []  # No validation needed
+        if not format_spec or not hasattr(format_spec, 'required_sections') or not format_spec.required_sections:
+            return []  # No validation needed
         
         # Check for required sections using regex to be more flexible with formatting
         for section in format_spec.required_sections:
