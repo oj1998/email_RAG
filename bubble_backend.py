@@ -656,7 +656,10 @@ async def process_document_query(
                 processing_time=processing_time,
                 conversation_context_used=bool(conversation_context),
                 intent_analysis=intent_analysis.dict(),
-                needs_sources=needs_sources
+                # Add these lines:
+                format_used=getattr(category_format, 'style', FormatStyle.NARRATIVE).value 
+                           if hasattr(category_format, 'style') else "unknown",
+                format_validation_errors=validation_errors if 'validation_errors' in locals() else []
             ).dict()
         }
 
