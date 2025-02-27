@@ -42,12 +42,14 @@ from fastapi import APIRouter
 
 query_router = APIRouter()
 
-# Enhanced logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Add this line to enable detailed logging for query_intent
+logging.getLogger('query_intent').setLevel(logging.DEBUG)
 
 # Load environment variables
 load_dotenv()
