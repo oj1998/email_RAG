@@ -284,40 +284,50 @@ class NLPTransformer:
         source_documents: List,
         classification: Dict
     ) -> Tuple[str, IntentAnalysis]:
-        # Analyze query intent
-        intent_analysis = await self.intent_analyzer.analyze(query, context)
-        
-        # Get base category format
-        category_format = self.format_mapper.get_format_for_category(
-            classification['category']
-        )
-
-        # If it's a casual/discussion intent, use simplified format
-        if intent_analysis.primary_intent in [QueryIntent.DISCUSSION, QueryIntent.CLARIFICATION]:
-            formatted_content = await self._format_conversational(
-                raw_response,
-                classification['category'],
-                intent_analysis
+        try:
+            # Analyze query intent
+            intent_analysis = await self.intent_analyzer.analyze(query, context)
+            
+            # Get base category format
+            category_format = self.format_mapper.get_format_for_category(
+                classification['category']
             )
-            return formatted_content, intent_analysis
-
-        # For emergency intent, always use structured safety format
-        if intent_analysis.primary_intent == QueryIntent.EMERGENCY:
-            formatted_content = await self._format_emergency(
+    
+            # If it's a casual/discussion intent, use simplified format
+            if intent_analysis and hasattr(intent_analysis, 'primary_intent') and intent_analysis.primary_intent in [QueryIntent.DISCUSSION, QueryIntent.CLARIFICATION]:
+                formatted_content = await self._format_conversational(
+                    raw_response,
+                    classification['category'],
+                    intent_analysis
+                )
+                return formatted_content, intent_analysis
+    
+            # For emergency intent, always use structured safety format
+            if intent_analysis and hasattr(intent_analysis, 'primary_intent') and intent_analysis.primary_intent == QueryIntent.EMERGENCY:
+                formatted_content = await self._format_emergency(
+                    raw_response,
+                    classification,
+                    intent_analysis
+                )
+                return formatted_content, intent_analysis
+    
+            # For other cases, use standard structured format
+            formatted_content = await self._format_structured(
                 raw_response,
+                category_format,
                 classification,
                 intent_analysis
             )
             return formatted_content, intent_analysis
-
-        # For other cases, use standard structured format
-        formatted_content = await self._format_structured(
-            raw_response,
-            category_format,
-            classification,
-            intent_analysis
-        )
-        return formatted_content, intent_analysis
+        except Exception as e:
+            # Fallback to a simple formatting if analysis fails
+            logger.warning(f"Content transformation failed: {str(e)}. Using fallback formatting.")
+            return raw_response, IntentAnalysis(
+                primary_intent=QueryIntent.INFORMATION,
+                secondary_intents=[],
+                confidence=0.5,
+                reasoning="Fallback due to transformation error"
+            )
 
     async def _format_conversational(
         self,
