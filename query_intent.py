@@ -281,11 +281,10 @@ class SmartQueryIntentAnalyzer:
             - DISCUSSION: User wants to engage in casual inquiry or conversation
             - EMERGENCY: User has an urgent or immediate need
             
-            Return a JSON object with EXACTLY this format:
-            {"intent": "PRIMARY_INTENT", "secondary_intent": "SECONDARY_INTENT", "confidence": 0.8, "urgency": 3, "reasoning": "Brief explanation"}
+            Return ONLY a valid JSON object with EXACTLY this format:
+            {"intent": "intent_value", "secondary_intent": "secondary_intent_value", "confidence": 0.8, "urgency": 3, "reasoning": "Brief explanation"}
             
-            Use only lowercase for intent values. Do not include any explanation or text outside the JSON object.
-            Be decisive in your classification and provide clear reasoning.
+            Use only lowercase for intent values. The "intent" must be one of: "instruction", "information", "clarification", "discussion", or "emergency".
             """),
             ("user", """Query: {query}
             
@@ -293,43 +292,20 @@ class SmartQueryIntentAnalyzer:
             """)
         ])
         
-        response = await self.llm.ainvoke(
-            prompt.format_messages(
-                query=query,
-                context=str(context)
-            )
-        )
-        
-        # Parse the JSON response
-        import json
         try:
-            # Clean the response content to handle potential formatting issues
-            content = response.content.strip()
+            response = await self.llm.ainvoke(
+                prompt.format_messages(
+                    query=query,
+                    context=str(context)
+                )
+            )
             
-            # Handle cases where the model includes markdown code blocks
-            if content.startswith("```json"):
-                content = content.split("```json")[1]
-            if content.endswith("```"):
-                content = content.split("```")[0]
-                
-            # Further cleanup for any remaining non-JSON text
-            content = content.strip()
+            # Parse the JSON response directly like in ConstructionClassifier
+            result = json.loads(response.content)
             
-            # Look for the JSON object - find the first '{' and last '}'
-            start = content.find('{')
-            end = content.rfind('}')
-            
-            if start != -1 and end != -1 and end > start:
-                content = content[start:end+1]
-            
-            # Log the content for debugging
-            logger.debug(f"Attempting to parse JSON: {content}")
-            
-            result = json.loads(content)
-            
-            # Validate and standardize the response
+            # Validate required fields
             if "intent" not in result:
-                raise ValueError("Missing intent in LLM response")
+                raise ValueError("Missing 'intent' in LLM response")
                 
             # Convert string intent to enum
             try:
@@ -346,18 +322,24 @@ class SmartQueryIntentAnalyzer:
                     result["secondary_intent"] = None
                     
             return result
-        except Exception as e:
-            logger.warning(f"LLM analysis failed: {str(e)}")
-            
-            # Provide a default fallback response
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parsing error: {e}, response: {response.content}")
             return {
                 "intent": QueryIntent.INFORMATION,
                 "secondary_intent": None,
                 "confidence": 0.5,
                 "urgency": 1,
-                "reasoning": "Fallback due to parsing error"
+                "reasoning": f"Fallback due to JSON parsing error"
             }
-
+        except Exception as e:
+            logger.warning(f"LLM analysis failed: {str(e)}")
+            return {
+                "intent": QueryIntent.INFORMATION,
+                "secondary_intent": None,
+                "confidence": 0.5,
+                "urgency": 1,
+                "reasoning": "Fallback due to analysis error"
+            }
     def _combine_scores(
         self, 
         pattern_scores: Dict[QueryIntent, float],
