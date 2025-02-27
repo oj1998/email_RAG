@@ -43,33 +43,6 @@ class SmartQueryIntentAnalyzer:
         # Still keep some core patterns for backup and hybrid approach
         self._initialize_pattern_dictionary()
         
-        # Set up embeddings if enabled
-        if self.use_embeddings:
-            try:
-                self.embeddings = OpenAIEmbeddings()
-                self._initialize_intent_embeddings()
-            except Exception as e:
-                logger.warning(f"Failed to initialize embeddings: {e}")
-                self.use_embeddings = False
-
-        # Set up LLM if enabled
-        if self.use_llm:
-            try:
-                from langchain.chat_models import ChatOpenAI
-                self.llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo")
-            except Exception as e:
-                logger.warning(f"Failed to initialize LLM: {e}")
-                self.use_llm = False
-        
-        # Context signal weights
-        self.context_weights = {
-            'time_pressure': 0.3,
-            'previous_queries': 0.2,
-            'equipment_active': 0.15, 
-            'weather_conditions': 0.1,
-            'noise_level': 0.05
-        }
-        
         # Intent examples for semantic comparison
         self.intent_examples = {
             QueryIntent.INSTRUCTION: [
@@ -108,6 +81,35 @@ class SmartQueryIntentAnalyzer:
                 "Chemical spill on the second floor. Need emergency response!"
             ]
         }
+        
+        # Set up embeddings if enabled
+        if self.use_embeddings:
+            try:
+                self.embeddings = OpenAIEmbeddings()
+                self._initialize_intent_embeddings()
+            except Exception as e:
+                logger.warning(f"Failed to initialize embeddings: {e}")
+                self.use_embeddings = False
+        
+        # Set up LLM if enabled
+        if self.use_llm:
+            try:
+                from langchain.chat_models import ChatOpenAI
+                self.llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo")
+            except Exception as e:
+                logger.warning(f"Failed to initialize LLM: {e}")
+                self.use_llm = False
+        
+        # Context signal weights
+        self.context_weights = {
+            'time_pressure': 0.3,
+            'previous_queries': 0.2,
+            'equipment_active': 0.15, 
+            'weather_conditions': 0.1,
+            'noise_level': 0.05
+        }
+        
+        
 
     def _initialize_pattern_dictionary(self):
         """Initialize a reduced set of core patterns for hybrid approach"""
