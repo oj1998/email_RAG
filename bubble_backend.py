@@ -30,7 +30,7 @@ from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 from conversation_handler import ConversationHandler, ConversationContext
 from construction_classifier import ConstructionClassifier, QuestionType
 from weighted_memory import WeightedConversationMemory
-from format_mapper import FormatMapper, CategoryFormat
+from format_mapper import FormatMapper, CategoryFormat, FormatStyle
 from query_intent import SmartQueryIntentAnalyzer, QueryIntent, IntentAnalysis
 from smart_response_generator import SmartResponseGenerator
 
@@ -627,6 +627,14 @@ async def process_document_query(
         # Calculate processing time
         processing_time = (datetime.utcnow() - start_time).total_seconds()
 
+
+
+        format_mapper = FormatMapper()
+        category_format = format_mapper.get_format_for_category(classification.category)
+        validation_errors = []
+
+
+        
         # Prepare response
         response = {
             "status": "success",
