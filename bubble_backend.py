@@ -785,88 +785,8 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(query_router)
 
 # Export the router for use in other files
-__all__ = ['query_router', 'initialize_components', 'process_document_query', 'process_email_query', 'process_document']
+__all__ = ['query_router', 'initialize_components', 'process_document_query', 'process_email_query']
 
-@app.post("/process")
-async def process_document(request: ProcessRequest):
-    """Process a document and store its embeddings"""
-    global vector_store  # Make it explicit we're using the global instance
-    
-    if not vector_store:
-        logger.error("Vector store not initialized during document processing attempt")
-        raise HTTPException(
-            status_code=503, 
-            detail="Vector store not initialized. Please wait for system startup to complete and try again."
-        )
-
-    try:
-        # Extract filename from URL
-        filename = request.file_url.split("/")[-1]
-        
-        # Download and process file
-        logger.info(f"Starting processing of document: {filename}")
-        file_content = await download_file(request.file_url)
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-            temp_file.write(file_content)
-            temp_path = temp_file.name
-
-            try:
-                # Load and split document
-                loader = PyMuPDFLoader(temp_path)
-                documents = loader.load()
-                
-                text_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=1000,
-                    chunk_overlap=200
-                )
-                texts = text_splitter.split_documents(documents)
-
-                # Update metadata for each chunk
-                for text in texts:
-                    text.metadata.update({
-                        "document_id": request.document_id,
-                        "filename": filename,
-                        "title": request.metadata.get("title", filename),  
-                        "upload_time": datetime.utcnow().isoformat(),
-                        **(request.metadata or {})
-                    })
-
-                # Add to vector store with explicit error handling
-                try:
-                    vector_store.add_documents(texts)
-                except Exception as e:
-                    logger.error(f"Failed to add documents to vector store: {str(e)}")
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Failed to store document vectors: {str(e)}"
-                    )
-
-                # Log success
-                logger.info(f"Successfully processed document {request.document_id} with {len(texts)} chunks")
-
-                return {
-                    "status": "success",
-                    "document_id": request.document_id,
-                    "filename": filename,
-                    "chunks_processed": len(texts),
-                    "metadata": {
-                        "upload_time": datetime.utcnow().isoformat(),
-                        "chunk_size": 1000,
-                        "overlap": 200
-                    }
-                }
-
-            finally:
-                # Clean up temporary file
-                os.unlink(temp_path)
-                logger.debug(f"Cleaned up temporary file {temp_path}")
-
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions
-    except Exception as e:
-        logger.error(f"Error processing document: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Document processing failed: {str(e)}")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
