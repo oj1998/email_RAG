@@ -81,12 +81,14 @@ class SearchRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = None
     limit: Optional[int] = 10
 
-# Enhanced logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Add this line to enable DEBUG logs specifically for query_intent
+logging.getLogger('query_intent').setLevel(logging.DEBUG)
 
 # Load environment variables and validate
 required_env_vars = [
