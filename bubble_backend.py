@@ -285,7 +285,7 @@ class NLPTransformer:
         classification: Dict
     ) -> Tuple[str, IntentAnalysis]:
         # Analyze query intent
-        intent_analysis = self.intent_analyzer.analyze(query, context)
+        intent_analysis = await self.intent_analyzer.analyze(query, context)
         
         # Get base category format
         category_format = self.format_mapper.get_format_for_category(
