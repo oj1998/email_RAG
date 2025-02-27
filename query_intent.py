@@ -30,7 +30,7 @@ class IntentAnalysis(BaseModel):
     metadata: IntentMetadata
 
 class SmartQueryIntentAnalyzer:
-    def __init__(self, use_embeddings: bool = True, use_llm: bool = True):
+    def __init__(self, use_embeddings: bool = False, use_llm: bool = True):
         """
         Initialize the analyzer with options for using embeddings and/or LLM.
         
