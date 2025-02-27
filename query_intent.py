@@ -4,7 +4,7 @@ from pydantic import BaseModel
 import re
 from datetime import datetime
 import json
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 import numpy as np
 import logging
 
@@ -95,8 +95,11 @@ class SmartQueryIntentAnalyzer:
         # Set up LLM if enabled
         if self.use_llm:
             try:
-                from langchain.chat_models import ChatOpenAI
-                self.llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo")
+                from langchain_openai import ChatOpenAI
+                self.llm = ChatOpenAI(
+                    temperature=0, 
+                    model_name="gpt-3.5-turbo-0125"  # Model that supports function calling
+                )
             except Exception as e:
                 logger.warning(f"Failed to initialize LLM: {e}")
                 self.use_llm = False
@@ -269,84 +272,73 @@ class SmartQueryIntentAnalyzer:
         return scores
 
     async def _analyze_with_llm(self, query: str, context: Dict) -> Dict[str, Any]:
-        """Use an LLM to analyze intent more deeply"""
-        from langchain.prompts import ChatPromptTemplate
-        
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a construction site query analyzer. 
-            Analyze this query to determine the user's intent.
-            
-            Possible intents are:
-            - INSTRUCTION: User needs how-to steps or procedures
-            - INFORMATION: User wants to understand concepts or facts
-            - CLARIFICATION: User needs quick verification or confirmation
-            - DISCUSSION: User wants to engage in casual inquiry or conversation
-            - EMERGENCY: User has an urgent or immediate need
-            
-            IMPORTANT: You MUST respond ONLY with a valid JSON object in exactly this format:
-            {
-                "intent": "intent_value",
-                "secondary_intent": "secondary_intent_value", 
-                "confidence": 0.8,
-                "urgency": 3,
-                "reasoning": "Brief explanation"
+        """Use function calling for reliable structured output"""
+        try:
+            # Define the function schema
+            function_def = {
+                "name": "analyze_intent",
+                "description": "Analyze the intent of a construction query",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "intent": {
+                            "type": "string",
+                            "enum": ["instruction", "information", "clarification", "discussion", "emergency"],
+                            "description": "The primary intent of the query"
+                        },
+                        "secondary_intent": {
+                            "type": "string",
+                            "enum": ["instruction", "information", "clarification", "discussion", "emergency", "none"],
+                            "description": "Optional secondary intent"
+                        },
+                        "confidence": {
+                            "type": "number",
+                            "description": "Confidence in the classification (0-1)"
+                        },
+                        "urgency": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 5,
+                            "description": "Urgency level of the query"
+                        },
+                        "reasoning": {
+                            "type": "string",
+                            "description": "Brief explanation for the classification"
+                        }
+                    },
+                    "required": ["intent", "confidence", "urgency", "reasoning"]
+                }
             }
             
-            - Use only lowercase for intent values
-            - The "intent" must be one of: "instruction", "information", "clarification", "discussion", or "emergency"
-            - "secondary_intent" can be null
-            - Do not include any other text, comments, or explanations outside this JSON
-            """),
-            ("user", """Query: {query}
+            # Create the messages for the API call
+            messages = [
+                {"role": "system", "content": "You analyze construction queries to determine user intent."},
+                {"role": "user", "content": f"Query: {query}\nContext: {str(context)}"}
+            ]
             
-            Context: {context}
-            """)
-        ])
-        
-        try:
+            # Call the OpenAI API directly
             response = await self.llm.ainvoke(
-                prompt.format_messages(
-                    query=query,
-                    context=str(context)
-                )
+                messages=messages,
+                functions=[function_def],
+                function_call={"name": "analyze_intent"}
             )
             
-            # Clean and extract valid JSON
-            content = response.content.strip()
-            # Try to find JSON content (between curly braces)
-            import re
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                content = json_match.group(0)
-            
-            # Parse the JSON response
-            try:
-                result = json.loads(content)
-            except json.JSONDecodeError as e:
-                logger.warning(f"JSON parsing error: {e}, response: {content}")
-                raise ValueError(f"Failed to parse LLM response as JSON")
-            
-            # Validate required fields
-            if "intent" not in result:
-                raise ValueError("Missing 'intent' in LLM response")
+            # Extract the function call arguments
+            function_call = response.additional_kwargs.get('function_call')
+            if function_call and function_call.name == "analyze_intent":
+                result = json.loads(function_call.arguments)
                 
-            # Convert string intent to enum
-            try:
-                result["intent"] = QueryIntent(result["intent"].lower())
-            except (ValueError, KeyError):
-                # Default to INFORMATION if invalid intent
-                result["intent"] = QueryIntent.INFORMATION
-                
-            # Convert secondary intent if present
-            if result.get("secondary_intent") and result["secondary_intent"] != "null":
-                try:
-                    result["secondary_intent"] = QueryIntent(result["secondary_intent"].lower())
-                except (ValueError, KeyError):
+                # Process result
+                result["intent"] = QueryIntent(result["intent"])
+                if result.get("secondary_intent") and result["secondary_intent"].lower() not in ("none", "null"):
+                    result["secondary_intent"] = QueryIntent(result["secondary_intent"])
+                else:
                     result["secondary_intent"] = None
-            else:
-                result["secondary_intent"] = None
                     
-            return result
+                return result
+            else:
+                raise ValueError("No function call in response")
+                
         except Exception as e:
             logger.warning(f"LLM analysis failed: {str(e)}")
             return {
