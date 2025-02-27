@@ -316,17 +316,17 @@ class SmartQueryIntentAnalyzer:
                 {"role": "user", "content": f"Query: {query}\nContext: {str(context)}"}
             ]
             
-            # Call the OpenAI API directly
-            response = await self.llm.ainvoke(
-                messages=messages,
+            # Call the OpenAI API using the correct method syntax
+            response = self.llm.invoke(
+                messages,
                 functions=[function_def],
                 function_call={"name": "analyze_intent"}
             )
             
             # Extract the function call arguments
             function_call = response.additional_kwargs.get('function_call')
-            if function_call and function_call.name == "analyze_intent":
-                result = json.loads(function_call.arguments)
+            if function_call and function_call.get('name') == "analyze_intent":
+                result = json.loads(function_call.get('arguments'))
                 
                 # Process result
                 result["intent"] = QueryIntent(result["intent"])
