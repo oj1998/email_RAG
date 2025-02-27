@@ -173,7 +173,12 @@ class FormatMapper:
     def apply_formatting(self, content: str, format_spec: Optional[CategoryFormat] = None, 
                         category: Optional[str] = None, intent: Optional[Union[str, QueryIntent]] = None) -> str:
         """Apply appropriate formatting to the content"""
-        # Determine format spec if not provided
+        # Determine format spec if not provided or if it's a string
+        if isinstance(format_spec, str):
+            # If format_spec is actually a string (likely a category name), convert it
+            category = format_spec
+            format_spec = None
+            
         if not format_spec:
             if intent and category:
                 format_spec = self.get_format(intent, category)
