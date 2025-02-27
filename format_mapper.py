@@ -429,24 +429,7 @@ class FormatMapper:
         
         return content
     
-    def _highlight_key_terms(self, content: str) -> str:
-        """Highlight key terms and definitions"""
-        # Find definition-style sentences
-        content = re.sub(
-            r'([A-Z][a-zA-Z\s]+)(?=\s+is defined as|\s+refers to|\s+means|\s+is|\s+are)',
-            r'**\1**',
-            content
-        )
-        
-        # Find key value technical specifications
-        content = re.sub(
-            r'([A-Za-z\s]+):\s*([^.\n]+)',
-            r'**\1**: \2',
-            content
-        )
-        
-        return content
-    
+
     def _add_block_quotes(self, content: str) -> str:
         """Add block quotes for references and code citations"""
         # Find code or standard references and add block quotes
@@ -466,24 +449,7 @@ class FormatMapper:
             
         return content
     
-    def _format_specifications(self, content: str) -> str:
-        """Format technical specifications with proper highlighting"""
-        # Format key-value pairs and specs
-        content = re.sub(
-            r'([A-Za-z\s]+):\s*(\d+[^.\n]*)',
-            r'**\1**: \2',
-            content
-        )
-        
-        # Format technical values and units
-        content = re.sub(
-            r'(\d+(?:\.\d+)?)\s*((?:mm|cm|m|kg|lb|°C|°F|psi|kPa|MPa)\b)',
-            r'**\1 \2**',
-            content
-        )
-        
-        return content
-    
+
     def _ensure_section_formatting(self, content: str) -> str:
         """Ensure section headers are consistently formatted"""
         # Find section-like headers that aren't properly formatted
