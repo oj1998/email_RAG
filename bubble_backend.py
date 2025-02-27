@@ -304,8 +304,10 @@ class NLPTransformer:
     
             # For emergency intent, always use structured safety format
             if intent_analysis and hasattr(intent_analysis, 'primary_intent') and intent_analysis.primary_intent == QueryIntent.EMERGENCY:
-                formatted_content = await self._format_emergency(
+                safety_format = self.format_mapper.get_format_for_category("SAFETY")
+                formatted_content = await self._format_structured(
                     raw_response,
+                    safety_format,
                     classification,
                     intent_analysis
                 )
@@ -380,23 +382,7 @@ class NLPTransformer:
         # Fallback
         return content
 
-    async def _format_emergency(
-        self,
-        content: str,
-        classification: Dict,
-        intent_analysis: IntentAnalysis
-    ) -> str:
-        """Format emergency content with highest priority safety formatting."""
-        # Always use safety format with emergency priority
-        safety_format = self.format_mapper.get_format_for_category("SAFETY")
-        
-        return await self._format_structured(
-            content,
-            safety_format,
-            classification,
-            intent_analysis
-        )
-
+   
     async def _format_structured(
         self,
         content: str,
