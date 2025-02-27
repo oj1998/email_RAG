@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Tuple, Any, Union
 from pydantic import BaseModel
 import re
 from datetime import datetime
+import json
 from langchain_openai import OpenAIEmbeddings
 import numpy as np
 import logging
