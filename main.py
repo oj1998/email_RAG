@@ -28,6 +28,9 @@ from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from bubble_backend import query_router, initialize_components
 
+from email_loading_router import create_email_loading_router
+
+app.include_router(create_email_loading_router())
 
 # Define models inline instead of importing
 class Weather(BaseModel):
