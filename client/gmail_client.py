@@ -3,19 +3,63 @@ import os
 from datetime import datetime
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-
+from enum import Enum  # Add missing import
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 import pandas as pd
 
+class LoadingStrategy(str, Enum):
+    NEWER_FIRST = "newer-first"
+    OLDER_FIRST = "older-first"
+    IMPORTANT_FIRST = "important-first"
+
 @dataclass
 class EmailSearchOptions:
-    """Search parameters for Gmail API"""
+    """Enhanced search parameters for Gmail API"""
+    # Basic search parameters
     query: str = None  # Gmail search query
-    max_results: int = 100
+    max_results: int = 100  # Number of emails to load
     include_attachments: bool = False
+    
+    # Filter parameters
+    subject: str = None
+    from_email: str = None
+    to_email: str = None
+    after_date: str = None  # Format: YYYY/MM/DD
+    before_date: str = None  # Format: YYYY/MM/DD
+    has_label: str = None
+    
+    # Processing parameters
+    loading_strategy: LoadingStrategy = LoadingStrategy.NEWER_FIRST
+    chunk_size: int = 500
+    chunk_overlap: int = 100
+    
+    def build_query(self) -> str:
+        """Build a complete Gmail API query string from the parameters"""
+        query_parts = []
+        
+        # Add main query if specified
+        if self.query:
+            query_parts.append(f"({self.query})")
+            
+        # Add filter parameters
+        if self.subject:
+            query_parts.append(f"subject:({self.subject})")
+        if self.from_email:
+            query_parts.append(f"from:{self.from_email}")
+        if self.to_email:
+            query_parts.append(f"to:{self.to_email}")
+        if self.after_date:
+            query_parts.append(f"after:{self.after_date}")
+        if self.before_date:
+            query_parts.append(f"before:{self.before_date}")
+        if self.has_label:
+            query_parts.append(f"label:{self.has_label}")
+        
+        # Return combined query or default to all emails
+        return " ".join(query_parts) if query_parts else "in:anywhere"
 
 class GmailClient:
     """Client for interacting with Gmail API"""
@@ -161,7 +205,7 @@ class GmailClient:
 
     def search_emails(self, options: EmailSearchOptions) -> pd.DataFrame:
         """
-        Search emails and return as DataFrame
+        Search emails and return as DataFrame with enhanced sorting and filtering
         
         Args:
             options: Search options including query string and parameters
@@ -172,17 +216,51 @@ class GmailClient:
         if not self.service:
             raise ValueError("Gmail service not initialized. Must authenticate first.")
             
-        # Execute search
-        query = options.query if options.query else "in:anywhere"
+        # Build complete query from options
+        query = options.build_query()
+        
+        # Set up ordering based on loading strategy
+        ordering = None
+        if options.loading_strategy == LoadingStrategy.NEWER_FIRST:
+            ordering = "NEWEST_FIRST"  # Default Gmail API behavior
+        elif options.loading_strategy == LoadingStrategy.OLDER_FIRST:
+            ordering = "OLDEST_FIRST"
+        
+        # Execute search with appropriate parameters
         results = self.service.users().messages().list(
             userId='me', 
             q=query,
-            maxResults=options.max_results
+            maxResults=options.max_results,
+            orderBy=ordering if ordering else None
         ).execute()
         
         messages = results.get('messages', [])
         
-        # Get full data for each message
+        # Handle IMPORTANT_FIRST strategy through post-processing
+        if options.loading_strategy == LoadingStrategy.IMPORTANT_FIRST:
+            # We'll need to get message data first to check importance
+            # This is a simplified implementation
+            message_ids = [msg['id'] for msg in messages]
+            emails_data = []
+            
+            for msg_id in message_ids:
+                email_data = self._get_message_data(
+                    msg_id, 
+                    include_attachments=options.include_attachments
+                )
+                emails_data.append(email_data)
+            
+            # Sort by whether the email has IMPORTANT label
+            emails_df = pd.DataFrame(emails_data)
+            if not emails_df.empty:
+                emails_df['is_important'] = emails_df['label_ids'].apply(
+                    lambda labels: 'IMPORTANT' in (labels or [])
+                )
+                emails_df = emails_df.sort_values(by='is_important', ascending=False)
+            
+            return emails_df
+        
+        # For normal ordering strategies, process as usual
         emails_data = []
         for message in messages:
             email_data = self._get_message_data(
