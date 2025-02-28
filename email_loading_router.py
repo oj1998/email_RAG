@@ -7,7 +7,7 @@ import os
 
 # Import local components
 from client.gmail_client import GmailClient, EmailSearchOptions, LoadingStrategy
-from simple_pipeline import SimpleEmailPipeline
+from loaders.simple_pipeline import SimpleEmailPipeline
 
 logger = logging.getLogger(__name__)
 
