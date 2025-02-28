@@ -20,6 +20,9 @@ class EmailLoader(BaseLoader):
         self.email_client = email_client
         self.search_options = search_options
 
+        self.chunk_size = search_options.chunk_size
+        self.chunk_overlap = search_options.chunk_overlap
+
     def _is_tag_visible(self, element):
         if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
             return False
@@ -87,8 +90,8 @@ class EmailLoader(BaseLoader):
         """Load and split documents using specified or default text splitter."""
         if text_splitter is None:
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=DEFAULT_CHUNK_SIZE,
-                chunk_overlap=DEFAULT_CHUNK_OVERLAP
+                chunk_size=self.chunk_size,
+                chunk_overlap=self.chunk_overlap
             )
             
         all_documents = self.load()
