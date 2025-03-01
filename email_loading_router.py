@@ -87,6 +87,17 @@ async def process_emails_task(
 ):
     """Background task to process emails"""
     try:
+        # Convert string to enum value
+        loading_strategy_enum = None
+        if config.loading_strategy == "newer-first":
+            loading_strategy_enum = LoadingStrategy.NEWER_FIRST
+        elif config.loading_strategy == "older-first":
+            loading_strategy_enum = LoadingStrategy.OLDER_FIRST
+        elif config.loading_strategy == "important-first":
+            loading_strategy_enum = LoadingStrategy.IMPORTANT_FIRST
+        else:
+            loading_strategy_enum = LoadingStrategy.NEWER_FIRST  # Default
+
         # Create search options from config
         search_options = EmailSearchOptions(
             max_results=config.load_amount,
@@ -97,7 +108,7 @@ async def process_emails_task(
             after_date=config.after_date,
             before_date=config.before_date,
             has_label=config.has_label,
-            loading_strategy=config.loading_strategy,
+            loading_strategy=loading_strategy_enum,  # Use enum value, not string
             chunk_size=config.chunk_size,
             chunk_overlap=config.chunk_overlap
         )
