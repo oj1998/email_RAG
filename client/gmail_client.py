@@ -203,6 +203,26 @@ class GmailClient:
                 attachments.extend(self._get_attachments_from_parts(part['parts'], message_id))
         return attachments
 
+    def get_user_email(self) -> Optional[str]:
+        """
+        Get the email address of the authenticated user
+        
+        Returns:
+            Email address of the authenticated user or None if unsuccessful
+        """
+        if not self.service:
+            return None
+            
+        try:
+            # Call the Gmail API to get user profile
+            profile = self.service.users().getProfile(userId='me').execute()
+            return profile.get('emailAddress')
+        except Exception as e:
+            # Log the error (assuming you have logging configured)
+            import logging
+            logging.error(f"Error getting user email: {str(e)}")
+            return None
+
     def search_emails(self, options: EmailSearchOptions) -> pd.DataFrame:
         """
         Search emails and return as DataFrame with enhanced sorting and filtering
