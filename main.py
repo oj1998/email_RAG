@@ -172,7 +172,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://mvp-frontend-v1-gj.vercel.app", "http://localhost:3000"],  # Add your frontend domains
+    allow_origins=["https://mvp-frontend-v1-oj.vercel.app", "http://localhost:3000"],  # Add your frontend domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
