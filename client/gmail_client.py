@@ -259,8 +259,8 @@ class GmailClient:
             'q': query,
             'maxResults': options.max_results
         }
-        if ordering:
-            params['orderBy'] = ordering
+        #if ordering:
+            #params['orderBy'] = ordering
         
         results = self.service.users().messages().list(**params).execute()
         messages = results.get('messages', [])
