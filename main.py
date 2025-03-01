@@ -30,6 +30,7 @@ from bubble_backend import query_router, initialize_components
 
 from email_loading_router import create_email_loading_router
 
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 
 # Define models inline instead of importing
@@ -169,10 +170,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://mvp-frontend-v1-gj.vercel.app", "http://localhost:3000"],  # Add your frontend domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -235,9 +235,26 @@ async def gmail_auth():
         flow, auth_url = GmailClient.get_auth_url(credentials)
         FLOWS['gmail'] = flow
         
-        return RedirectResponse(url=auth_url)
+        # Return URL as JSON instead of redirecting
+        return {"auth_url": auth_url}
     except Exception as e:
+        logger.error(f"Gmail auth error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/auth/gmail/status")
+async def gmail_auth_status():
+    """Check Gmail authentication status"""
+    try:
+        # Check if Gmail client exists in global state
+        is_authenticated = 'user' in GMAIL_CLIENTS and GMAIL_CLIENTS['user'] is not None
+        
+        return {
+            "authenticated": is_authenticated,
+            "email": GMAIL_CLIENTS['user'].get_user_email() if is_authenticated else None
+        }
+    except Exception as e:
+        logger.error(f"Error checking Gmail auth status: {str(e)}")
+        return {"authenticated": False, "error": str(e)}
 
 @app.get("/oauth2callback")
 async def oauth2callback(code: str, state: Optional[str] = None):
@@ -254,9 +271,30 @@ async def oauth2callback(code: str, state: Optional[str] = None):
         token = gmail_client.authorize_with_code(flow, code)
         GMAIL_CLIENTS['user'] = gmail_client
         
-        return {"message": "Authentication successful", "token": token}
+        # Return HTML that closes the popup and communicates success
+        return HTMLResponse(content="""
+            <html>
+                <body>
+                    <h2>Authentication Successful!</h2>
+                    <p>You can close this window and return to the application.</p>
+                    <script>
+                        window.close();
+                    </script>
+                </body>
+            </html>
+        """)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"OAuth callback error: {str(e)}")
+        # Return HTML with error message
+        return HTMLResponse(content=f"""
+            <html>
+                <body>
+                    <h2>Authentication Failed</h2>
+                    <p>Error: {str(e)}</p>
+                    <p>You can close this window and try again.</p>
+                </body>
+            </html>
+        """)
 
 
 async def extract_source_attributions(response_content, source_documents):
