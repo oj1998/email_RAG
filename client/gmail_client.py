@@ -247,13 +247,16 @@ class GmailClient:
             ordering = "OLDEST_FIRST"
         
         # Execute search with appropriate parameters
-        results = self.service.users().messages().list(
-            userId='me', 
-            q=query,
-            maxResults=options.max_results,
-            orderBy=ordering if ordering else None
-        ).execute()
         
+        params = {
+            'userId': 'me',
+            'q': query,
+            'maxResults': options.max_results
+        }
+        if ordering:
+            params['orderBy'] = ordering
+        
+        results = self.service.users().messages().list(**params).execute()
         messages = results.get('messages', [])
         
         # Handle IMPORTANT_FIRST strategy through post-processing
