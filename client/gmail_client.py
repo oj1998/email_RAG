@@ -233,6 +233,12 @@ class GmailClient:
         Returns:
             DataFrame containing email data
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"search_emails called with loading_strategy: {options.loading_strategy}")
+        logger.info(f"loading_strategy type: {type(options.loading_strategy)}")
+        
         if not self.service:
             raise ValueError("Gmail service not initialized. Must authenticate first.")
             
