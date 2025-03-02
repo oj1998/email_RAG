@@ -709,17 +709,29 @@ async def query_documents(request: QueryRequest):
             conversation_id=request.conversation_id
         )
         
+        # Log the request details and routing decision factors
+        logger.info(f"Processing query for conversation {request.conversation_id}: '{request.query}'")
+        logger.info(f"Info sources: {request.info_sources}")
+        
+        # Make and log the routing decision
+        use_email_processing = is_email_query(request)
+        logger.info(f"Routing decision: {'EMAIL' if use_email_processing else 'DOCUMENT'} processing")
+        
         # Process query with context
-        if is_email_query(request):
+        if use_email_processing:
+            logger.info("Starting email query processing")
             response = await process_email_query(
                 request,
                 conversation_context=conversation_context
             )
+            logger.info("Email query processing completed successfully")
         else:
+            logger.info("Starting document query processing")
             response = await process_document_query(
                 request,
                 conversation_context=conversation_context
             )
+            logger.info("Document query processing completed successfully")
 
         # Save the interaction
         await conversation_handler.save_conversation_turn(
@@ -728,6 +740,7 @@ async def query_documents(request: QueryRequest):
             content=request.query,
             metadata={
                 "context": request.context.dict(),
+                "query_type": "email" if use_email_processing else "document",
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
@@ -740,6 +753,7 @@ async def query_documents(request: QueryRequest):
                 "sources": response.get("sources", []),
                 "classification": response.get("classification", {}),
                 "metadata": response.get("metadata", {}),
+                "query_type": "email" if use_email_processing else "document",
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
@@ -749,6 +763,7 @@ async def query_documents(request: QueryRequest):
     except Exception as e:
         logger.error(f"Error in query routing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 async def initialize_components():
     """Initialize all components needed for the query endpoint"""
