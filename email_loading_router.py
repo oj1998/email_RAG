@@ -58,15 +58,21 @@ def get_embeddings_model():
     return OpenAIEmbeddings()
 
 def get_vector_store():
-    """Get vector store"""
-    from main import vector_store  # Import from main app state
+    """Get vector store for emails"""
+    from loaders.vector_store_loader import VectorStoreFactory
+    from langchain_openai import OpenAIEmbeddings
+    import os
     
-    if vector_store is None:
-        raise HTTPException(
-            status_code=503, 
-            detail="Vector store not initialized. Please wait for system startup to complete."
-        )
-    return vector_store
+    # Create and return a Supabase vector store
+    return VectorStoreFactory.create(
+        embeddings_model=OpenAIEmbeddings(),
+        config={
+            "type": "supabase",
+            "supabase_url": os.getenv("SUPABASE_URL"),
+            "supabase_key": os.getenv("SUPABASE_SERVICE_KEY"),
+            "collection_name": "email_embeddings"
+        }
+    )
 
 # Progress handler function
 def handle_progress_update(job_id: str, progress_data: Dict[str, Any]):
