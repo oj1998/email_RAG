@@ -133,10 +133,17 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             for email in relevant_emails
         ]
         
+        # Return response with metadata indicating this is an email query
         return {
             "status": "success",
             "answer": answer,
-            "sources": sources
+            "sources": sources,
+            "metadata": {
+                "query_type": "email",
+                "processing_time": 0.0,  # You might want to calculate actual processing time
+                "source_count": len(sources),
+                "conversation_context_used": bool(context and context.get("conversation_history"))
+            }
         }
         
     except Exception as e:
