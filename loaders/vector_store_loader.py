@@ -33,6 +33,8 @@ class CustomSupabaseVectorStore(SupabaseVectorStore):
         logger = logging.getLogger(__name__)
         
         logger.info(f"CustomSupabaseVectorStore.add_texts called with {len(list(texts))} texts")
+        print("=" * 80)
+        print(f"SUPABASE: add_texts called with {len(list(texts))} texts")
         
         if not texts:
             logger.warning("No texts provided to add_texts, returning empty list")
@@ -43,6 +45,7 @@ class CustomSupabaseVectorStore(SupabaseVectorStore):
             logger.info("Generating embeddings for texts")
             embeddings = self._embedding.embed_documents(list(texts))
             logger.info(f"Generated {len(embeddings)} embeddings")
+            print(f"SUPABASE: Generated {len(embeddings)} embeddings of dimension {len(embeddings[0]) if embeddings else 'unknown'}")
             
             # Create records without explicit ID values
             records = []
@@ -56,11 +59,17 @@ class CustomSupabaseVectorStore(SupabaseVectorStore):
                 records.append(record)
             
             logger.info(f"Prepared {len(records)} records for insertion")
+            print(f"SUPABASE: About to insert {len(records)} records into {self.table_name}")
+            print(f"SUPABASE: First record keys: {list(records[0].keys()) if records else 'No records'}")
             
             # Insert directly using Supabase client
             # This lets Supabase handle ID generation
             logger.info(f"Inserting records into table {self.table_name}")
             result = self._client.table(self.table_name).insert(records).execute()
+
+            print(f"SUPABASE: Insert result: {result}")
+            print(f"SUPABASE: Response data: {result.data if hasattr(result, 'data') else 'No data'}")
+            print(f"SUPABASE: Response error: {result.error if hasattr(result, 'error') else 'No error'}")
 
             import logging
             logger = logging.getLogger(__name__)
