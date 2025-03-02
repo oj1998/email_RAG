@@ -28,7 +28,8 @@ async def get_email_qa_system():
     if EMAIL_QA_SYSTEM is None:
         try:
             # Initialize embedding model
-            embeddings_model = HuggingFaceEmbeddings()
+            from langchain_openai import OpenAIEmbeddings
+            embeddings_model = OpenAIEmbeddings()
             
             # Initialize language model
             llm = ChatOpenAI(
