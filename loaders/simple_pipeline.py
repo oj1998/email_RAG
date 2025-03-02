@@ -104,6 +104,11 @@ class SimpleEmailPipeline:
                 total_batches, 
                 f"Processing batch {i // batch_size + 1}/{total_batches} ({batch_count} chunks)"
             )
+
+            print("=" * 80)
+            print(f"PIPELINE: About to add {len(texts)} texts to vector store")
+            print(f"PIPELINE: Vector store type: {type(self.vector_store).__name__}")
+            print(f"PIPELINE: First few metadata keys: {list(metadatas[0].keys()) if metadatas and len(metadatas) > 0 else 'No metadata'}")
             
             self.vector_store.add_texts(
                 texts=texts,
