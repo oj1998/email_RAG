@@ -724,6 +724,10 @@ async def query_documents(request: QueryRequest):
                 request,
                 conversation_context=conversation_context
             )
+            # Ensure query_type is set in the response
+            if "metadata" not in response:
+                response["metadata"] = {}
+            response["metadata"]["query_type"] = "email"
             logger.info("Email query processing completed successfully")
         else:
             logger.info("Starting document query processing")
@@ -731,6 +735,10 @@ async def query_documents(request: QueryRequest):
                 request,
                 conversation_context=conversation_context
             )
+            # Ensure query_type is set in the response
+            if "metadata" not in response:
+                response["metadata"] = {}
+            response["metadata"]["query_type"] = "document"
             logger.info("Document query processing completed successfully")
 
         # Save the interaction
