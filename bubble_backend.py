@@ -475,7 +475,7 @@ async def process_email_query(
         # Enhance context with conversation history
         enhanced_context = {
             **request.context.dict(),
-            "conversation_history": conversation_context.get("chat_history", []) if conversation_context else []
+            "conversation_history": conversation_context.dict().get("chat_history", []) if conversation_context else []
         }
 
         # Get answer using email adapter
