@@ -55,7 +55,18 @@ class CustomSupabaseVectorStore(SupabaseVectorStore):
                     "embedding": embedding,
                 }
                 if metadatas is not None:
-                    record["metadata"] = metadatas[i]
+                    meta = metadatas[i]
+                    record["metadata"] = meta  # Keep the full metadata
+                    
+                    # Extract specific fields to match table schema
+                    record["email_id"] = meta.get("email_id", "")
+                    record["thread_id"] = meta.get("thread_id", "")
+                    record["subject"] = meta.get("subject", "")
+                    record["sender"] = meta.get("sender", "")
+                    record["recipients"] = meta.get("recipients", "")
+                    record["date"] = meta.get("date", "")
+                    record["label_ids"] = meta.get("label_ids", [])
+                    record["mime_type"] = meta.get("mime_type", "")
                 records.append(record)
             
             logger.info(f"Prepared {len(records)} records for insertion")
