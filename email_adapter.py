@@ -187,20 +187,31 @@ def create_email_router():
 
 def is_email_query(request_data: Dict[str, Any]) -> bool:
     """Determine if a query should be routed to the email system"""
-    if request_data.get("email_filters"):
-        return True
-        
+    # First, check if email was explicitly selected as an info source
     info_sources = request_data.get("info_sources", [])
     if info_sources and any(
         source.lower() in ["emails", "email", "mail", "gmail"]
         for source in info_sources
     ):
+        logger.info(f"Routing to EMAIL: Source selection specified email ({info_sources})")
         return True
         
+    # Then check for email filters
+    if request_data.get("email_filters"):
+        logger.info("Routing to EMAIL: Email filters specified")
+        return True
+        
+    # Finally check for email keywords in the query
     query = request_data.get("query", "").lower()
     email_keywords = [
         "email", "mail", "gmail", "inbox", "message",
         "received", "sent", "folder", "label"
     ]
     
-    return any(keyword in query for keyword in email_keywords)
+    found_keywords = [keyword for keyword in email_keywords if keyword in query]
+    if found_keywords:
+        logger.info(f"Routing to EMAIL: Query contains email keywords {found_keywords}")
+        return True
+    
+    logger.info("Routing to DOCUMENT: No email indicators found")
+    return False
