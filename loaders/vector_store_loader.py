@@ -61,6 +61,14 @@ class CustomSupabaseVectorStore(SupabaseVectorStore):
             # This lets Supabase handle ID generation
             logger.info(f"Inserting records into table {self.table_name}")
             result = self._client.table(self.table_name).insert(records).execute()
+
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Supabase insert operation details:")
+            logger.info(f"Table name: {self.table_name}")
+            logger.info(f"Number of records: {len(records)}")
+            logger.info(f"Response data: {result.data if hasattr(result, 'data') else 'No data'}")
+            logger.info(f"Response error: {result.error if hasattr(result, 'error') else 'No error'}")
             
             logger.info(f"Insert result: {result}")
             
