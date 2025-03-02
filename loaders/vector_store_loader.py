@@ -28,41 +28,53 @@ class CustomSupabaseVectorStore(SupabaseVectorStore):
         ids: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[str]:
-        """Add texts to the vectorstore with proper ID handling
-
-        Args:
-            texts: Iterable of strings to add to the vectorstore.
-            metadatas: Optional list of metadatas associated with the texts.
-            ids: Optional list of IDs to associate with the texts. Will be ignored.
-
-        Returns:
-            List of IDs from the vectorstore
-        """
+        """Add texts to the vectorstore with proper ID handling"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"CustomSupabaseVectorStore.add_texts called with {len(list(texts))} texts")
+        
         if not texts:
+            logger.warning("No texts provided to add_texts, returning empty list")
             return []
-
-        # Process inputs
-        embeddings = self._embedding.embed_documents(list(texts))
-        
-        # Create records without explicit ID values
-        records = []
-        for i, (text, embedding) in enumerate(zip(texts, embeddings)):
-            record = {
-                "content": text,
-                "embedding": embedding,
-            }
-            if metadatas is not None:
-                record["metadata"] = metadatas[i]
-            records.append(record)
-
-        # Insert directly using Supabase client
-        # This lets Supabase handle ID generation
-        result = self._client.table(self.table_name).insert(records).execute()
-        
-        # Extract the generated IDs from the result
-        if hasattr(result, 'data') and result.data:
-            return [str(item['id']) for item in result.data]
-        return []
+    
+        try:
+            # Process inputs
+            logger.info("Generating embeddings for texts")
+            embeddings = self._embedding.embed_documents(list(texts))
+            logger.info(f"Generated {len(embeddings)} embeddings")
+            
+            # Create records without explicit ID values
+            records = []
+            for i, (text, embedding) in enumerate(zip(texts, embeddings)):
+                record = {
+                    "content": text,
+                    "embedding": embedding,
+                }
+                if metadatas is not None:
+                    record["metadata"] = metadatas[i]
+                records.append(record)
+            
+            logger.info(f"Prepared {len(records)} records for insertion")
+            
+            # Insert directly using Supabase client
+            # This lets Supabase handle ID generation
+            logger.info(f"Inserting records into table {self.table_name}")
+            result = self._client.table(self.table_name).insert(records).execute()
+            
+            logger.info(f"Insert result: {result}")
+            
+            # Extract the generated IDs from the result
+            if hasattr(result, 'data') and result.data:
+                ids = [str(item['id']) for item in result.data]
+                logger.info(f"Successfully inserted {len(ids)} records")
+                return ids
+            else:
+                logger.warning("No data returned from insert operation")
+                return []
+        except Exception as e:
+            logger.error(f"Error in add_texts: {str(e)}", exc_info=True)
+            raise
 
 
 class VectorStoreType(str, Enum):
