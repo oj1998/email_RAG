@@ -545,30 +545,6 @@ async def process_document(request: ProcessRequest):
                 # Log document info
                 logger.info(f"Document '{title}' has {total_pages} pages, split into {len(texts)} chunks")
 
-                for text in texts:
-                    # Create a descriptive context header that summarizes the document
-                    context_header = f"DOCUMENT: {title}\n"
-                    
-                    if request.metadata.get("document_type"):
-                        context_header += f"TYPE: {request.metadata.get('document_type')}\n"
-                    
-                    if request.metadata.get("description"):
-                        context_header += f"DESCRIPTION: {request.metadata.get('description')}\n"
-                        
-                    # Add folder and section information if available
-                    if request.metadata.get("folder"):
-                        context_header += f"FOLDER: {request.metadata.get('folder')}\n"
-                        
-                    if request.metadata.get("segmentation_group"):
-                        context_header += f"SECTION: {request.metadata.get('segmentation_group')}\n"
-                    
-                    # Add page information
-                    page_number = text.metadata.get("page", 0)
-                    context_header += f"PAGE: {page_number + 1} of {total_pages}\n\n"
-                    
-                    # Prepend the context header to the page content
-                    if hasattr(text, "page_content"):
-                        text.page_content = context_header + text.page_content
 
                 # Update metadata for each chunk with enhanced information
                 for i, text in enumerate(texts):
