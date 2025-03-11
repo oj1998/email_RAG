@@ -534,8 +534,8 @@ async def process_document(request: ProcessRequest):
                     pass  # No creation date available
                 
                 text_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=3000,
-                    chunk_overlap=500
+                    chunk_size=1500,
+                    chunk_overlap=300
                 )
                 texts = text_splitter.split_documents(documents)
 
