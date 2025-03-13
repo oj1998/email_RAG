@@ -202,27 +202,27 @@ class SmartQueryIntentAnalyzer:
             }
         }
 
-def _initialize_intent_embeddings(self):
-        """Precompute embeddings for intent examples"""
-        self.example_embeddings = {}
-        self.intent_centroids = {}
-        
-        # Compute embeddings for each example
-        for intent, examples in self.intent_examples.items():
-            try:
-                example_embeds = []
-                for example in examples:
-                    embedding = self.embeddings.embed_query(example)
-                    example_embeds.append(embedding)
-                
-                self.example_embeddings[intent] = example_embeds
-                
-                # Compute centroid (average) embedding for each intent
-                if example_embeds:
-                    centroid = np.mean(example_embeds, axis=0)
-                    self.intent_centroids[intent] = centroid
-            except Exception as e:
-                logger.error(f"Error computing embeddings for {intent}: {e}")
+    def _initialize_intent_embeddings(self):
+            """Precompute embeddings for intent examples"""
+            self.example_embeddings = {}
+            self.intent_centroids = {}
+            
+            # Compute embeddings for each example
+            for intent, examples in self.intent_examples.items():
+                try:
+                    example_embeds = []
+                    for example in examples:
+                        embedding = self.embeddings.embed_query(example)
+                        example_embeds.append(embedding)
+                    
+                    self.example_embeddings[intent] = example_embeds
+                    
+                    # Compute centroid (average) embedding for each intent
+                    if example_embeds:
+                        centroid = np.mean(example_embeds, axis=0)
+                        self.intent_centroids[intent] = centroid
+                except Exception as e:
+                    logger.error(f"Error computing embeddings for {intent}: {e}")
 
     async def analyze(self, query: str, context: Dict) -> IntentAnalysis:
         """
@@ -322,88 +322,88 @@ def _initialize_intent_embeddings(self):
             
         return scores
 
-async def _analyze_with_llm(self, query: str, context: Dict) -> Dict[str, Any]:
-        """Use function calling for reliable structured output"""
-        try:
-            # Define the function schema
-            function_def = {
-                "name": "analyze_intent",
-                "description": "Analyze the intent of a construction query",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "intent": {
-                            "type": "string",
-                            "enum": ["instruction", "information", "clarification", "discussion", 
-                                     "emergency", "greeting", "small_talk", "acknowledgment"],
-                            "description": "The primary intent of the query"
+    async def _analyze_with_llm(self, query: str, context: Dict) -> Dict[str, Any]:
+            """Use function calling for reliable structured output"""
+            try:
+                # Define the function schema
+                function_def = {
+                    "name": "analyze_intent",
+                    "description": "Analyze the intent of a construction query",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "intent": {
+                                "type": "string",
+                                "enum": ["instruction", "information", "clarification", "discussion", 
+                                         "emergency", "greeting", "small_talk", "acknowledgment"],
+                                "description": "The primary intent of the query"
+                            },
+                            "secondary_intent": {
+                                "type": "string",
+                                "enum": ["instruction", "information", "clarification", "discussion", 
+                                         "emergency", "greeting", "small_talk", "acknowledgment", "none"],
+                                "description": "Optional secondary intent"
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "description": "Confidence in the classification (0-1)"
+                            },
+                            "urgency": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 5,
+                                "description": "Urgency level of the query"
+                            },
+                            "reasoning": {
+                                "type": "string",
+                                "description": "Brief explanation for the classification"
+                            }
                         },
-                        "secondary_intent": {
-                            "type": "string",
-                            "enum": ["instruction", "information", "clarification", "discussion", 
-                                     "emergency", "greeting", "small_talk", "acknowledgment", "none"],
-                            "description": "Optional secondary intent"
-                        },
-                        "confidence": {
-                            "type": "number",
-                            "description": "Confidence in the classification (0-1)"
-                        },
-                        "urgency": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 5,
-                            "description": "Urgency level of the query"
-                        },
-                        "reasoning": {
-                            "type": "string",
-                            "description": "Brief explanation for the classification"
-                        }
-                    },
-                    "required": ["intent", "confidence", "urgency", "reasoning"]
+                        "required": ["intent", "confidence", "urgency", "reasoning"]
+                    }
                 }
-            }
-            
-            # Create the messages for the API call
-            messages = [
-                {"role": "system", "content": """You analyze construction and general queries to determine user intent.
-                For simple greetings, acknowledgments, or small talk, identify those accordingly rather than 
-                trying to fit them into construction categories."""},
-                {"role": "user", "content": f"Query: {query}\nContext: {str(context)}"}
-            ]
-            
-            # Call the OpenAI API using the correct method syntax
-            response = self.llm.invoke(
-                messages,
-                functions=[function_def],
-                function_call={"name": "analyze_intent"}
-            )
-            
-            # Extract the function call arguments
-            function_call = response.additional_kwargs.get('function_call')
-            if function_call and function_call.get('name') == "analyze_intent":
-                result = json.loads(function_call.get('arguments'))
                 
-                # Process result
-                result["intent"] = QueryIntent(result["intent"])
-                if result.get("secondary_intent") and result["secondary_intent"].lower() not in ("none", "null"):
-                    result["secondary_intent"] = QueryIntent(result["secondary_intent"])
-                else:
-                    result["secondary_intent"] = None
+                # Create the messages for the API call
+                messages = [
+                    {"role": "system", "content": """You analyze construction and general queries to determine user intent.
+                    For simple greetings, acknowledgments, or small talk, identify those accordingly rather than 
+                    trying to fit them into construction categories."""},
+                    {"role": "user", "content": f"Query: {query}\nContext: {str(context)}"}
+                ]
+                
+                # Call the OpenAI API using the correct method syntax
+                response = self.llm.invoke(
+                    messages,
+                    functions=[function_def],
+                    function_call={"name": "analyze_intent"}
+                )
+                
+                # Extract the function call arguments
+                function_call = response.additional_kwargs.get('function_call')
+                if function_call and function_call.get('name') == "analyze_intent":
+                    result = json.loads(function_call.get('arguments'))
                     
-                return result
-            else:
-                raise ValueError("No function call in response")
+                    # Process result
+                    result["intent"] = QueryIntent(result["intent"])
+                    if result.get("secondary_intent") and result["secondary_intent"].lower() not in ("none", "null"):
+                        result["secondary_intent"] = QueryIntent(result["secondary_intent"])
+                    else:
+                        result["secondary_intent"] = None
+                        
+                    return result
+                else:
+                    raise ValueError("No function call in response")
+                    
+            except Exception as e:
+                logger.warning(f"LLM analysis failed: {str(e)}")
+                return {
+                    "intent": QueryIntent.INFORMATION,
+                    "secondary_intent": None,
+                    "confidence": 0.5,
+                    "urgency": 1,
+                    "reasoning": "Fallback due to analysis error"
+                }
                 
-        except Exception as e:
-            logger.warning(f"LLM analysis failed: {str(e)}")
-            return {
-                "intent": QueryIntent.INFORMATION,
-                "secondary_intent": None,
-                "confidence": 0.5,
-                "urgency": 1,
-                "reasoning": "Fallback due to analysis error"
-            }
-            
     def _combine_scores(
         self, 
         pattern_scores: Dict[QueryIntent, float],
