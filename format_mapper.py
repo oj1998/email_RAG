@@ -633,3 +633,7 @@ class FormatMapper:
         )
         
         return content
+
+    def _highlight_key_terms(self, content: str) -> str:
+        """Placeholder for highlighting key terms - currently does nothing"""
+        return content
