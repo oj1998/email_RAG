@@ -16,6 +16,9 @@ class QueryIntent(Enum):
     CLARIFICATION = "clarification"  # Quick verification
     DISCUSSION = "discussion"        # Casual inquiry/conversation
     EMERGENCY = "emergency"          # Urgent/immediate needs
+    GREETING = "greeting"            # Simple hello/hi/greeting
+    SMALL_TALK = "small_talk"        # Casual conversation not requiring sources
+    ACKNOWLEDGMENT = "acknowledgment"  # Thank you, ok, I understand, etc.
 
 class IntentMetadata(BaseModel):
     confidence: float
@@ -80,6 +83,28 @@ class SmartQueryIntentAnalyzer:
                 "I need immediate help with a worker injury.",
                 "Power line down on the site! What's the procedure?",
                 "Chemical spill on the second floor. Need emergency response!"
+            ],
+            # Adding examples for new intent types
+            QueryIntent.GREETING: [
+                "Hello there",
+                "Good morning",
+                "Hi",
+                "Hey, how's it going?",
+                "Greetings"
+            ],
+            QueryIntent.SMALL_TALK: [
+                "How are you doing today?",
+                "Nice weather we're having",
+                "Did you see the game last night?",
+                "Just taking a break",
+                "How's your day going?"
+            ],
+            QueryIntent.ACKNOWLEDGMENT: [
+                "Thanks for the information",
+                "I understand now",
+                "Got it",
+                "That makes sense",
+                "Thank you for your help"
             ]
         }
         
@@ -148,10 +173,36 @@ class SmartQueryIntentAnalyzer:
                     r"emergency|immediate|urgent|right now|asap",
                     r"help|danger|accident"
                 ]
+            },
+            # Adding patterns for new intent types
+            QueryIntent.GREETING: {
+                'high_weight': [
+                    r"^(hi|hello|hey|greetings|good (morning|afternoon|evening))",
+                    r"how('s| is) it going",
+                    r"^what's up"
+                ]
+            },
+            QueryIntent.SMALL_TALK: {
+                'high_weight': [
+                    r"how are you",
+                    r"nice (day|weather)",
+                    r"(how's|how is) your day",
+                    r"did you (see|watch|hear)",
+                    r"just chatting"
+                ]
+            },
+            QueryIntent.ACKNOWLEDGMENT: {
+                'high_weight': [
+                    r"^(thanks|thank you)",
+                    r"^(got it|ok|okay|alright|i see)",
+                    r"^that makes sense",
+                    r"^(understood|I understand)",
+                    r"^appreciate (it|that)"
+                ]
             }
         }
 
-    def _initialize_intent_embeddings(self):
+def _initialize_intent_embeddings(self):
         """Precompute embeddings for intent examples"""
         self.example_embeddings = {}
         self.intent_centroids = {}
@@ -271,7 +322,7 @@ class SmartQueryIntentAnalyzer:
             
         return scores
 
-    async def _analyze_with_llm(self, query: str, context: Dict) -> Dict[str, Any]:
+async def _analyze_with_llm(self, query: str, context: Dict) -> Dict[str, Any]:
         """Use function calling for reliable structured output"""
         try:
             # Define the function schema
@@ -283,12 +334,14 @@ class SmartQueryIntentAnalyzer:
                     "properties": {
                         "intent": {
                             "type": "string",
-                            "enum": ["instruction", "information", "clarification", "discussion", "emergency"],
+                            "enum": ["instruction", "information", "clarification", "discussion", 
+                                     "emergency", "greeting", "small_talk", "acknowledgment"],
                             "description": "The primary intent of the query"
                         },
                         "secondary_intent": {
                             "type": "string",
-                            "enum": ["instruction", "information", "clarification", "discussion", "emergency", "none"],
+                            "enum": ["instruction", "information", "clarification", "discussion", 
+                                     "emergency", "greeting", "small_talk", "acknowledgment", "none"],
                             "description": "Optional secondary intent"
                         },
                         "confidence": {
@@ -312,7 +365,9 @@ class SmartQueryIntentAnalyzer:
             
             # Create the messages for the API call
             messages = [
-                {"role": "system", "content": "You analyze construction queries to determine user intent."},
+                {"role": "system", "content": """You analyze construction and general queries to determine user intent.
+                For simple greetings, acknowledgments, or small talk, identify those accordingly rather than 
+                trying to fit them into construction categories."""},
                 {"role": "user", "content": f"Query: {query}\nContext: {str(context)}"}
             ]
             
@@ -348,6 +403,7 @@ class SmartQueryIntentAnalyzer:
                 "urgency": 1,
                 "reasoning": "Fallback due to analysis error"
             }
+            
     def _combine_scores(
         self, 
         pattern_scores: Dict[QueryIntent, float],
@@ -390,6 +446,15 @@ class SmartQueryIntentAnalyzer:
         emergency_terms = ["emergency", "urgent", "immediately", "danger", "accident", "injured", "fire", "now"]
         if any(term in query.lower() for term in emergency_terms):
             combined_scores[QueryIntent.EMERGENCY] = max(combined_scores[QueryIntent.EMERGENCY], 0.7)
+        
+        # Special case for greetings and acknowledgments - check for common terms
+        greeting_terms = ["hi", "hello", "hey", "morning", "afternoon", "evening", "greetings"]
+        if any(term == query.lower() or query.lower().startswith(f"{term} ") for term in greeting_terms):
+            combined_scores[QueryIntent.GREETING] = max(combined_scores[QueryIntent.GREETING], 0.8)
+            
+        acknowledgment_terms = ["thanks", "thank you", "got it", "ok", "okay", "understood", "appreciate it"]
+        if any(term == query.lower() or query.lower().startswith(f"{term} ") for term in acknowledgment_terms):
+            combined_scores[QueryIntent.ACKNOWLEDGMENT] = max(combined_scores[QueryIntent.ACKNOWLEDGMENT], 0.8)
             
         logger.debug(f"Combined scores: {combined_scores}")
         return combined_scores
@@ -551,6 +616,10 @@ class SmartQueryIntentAnalyzer:
             if any(equip.lower() in high_risk_equipment for equip in context['activeEquipment']):
                 urgency += 1
 
+        # Social intents always have low urgency
+        if query.lower() in ["hi", "hello", "thanks", "thank you", "ok", "got it"]:
+            urgency = 1
+
         return min(5, urgency)  # Cap at 5
         
     def _get_markers(self, query: str, primary_intent: QueryIntent) -> List[str]:
@@ -585,7 +654,10 @@ class SmartQueryIntentAnalyzer:
             QueryIntent.INFORMATION: "The query seeks factual information or conceptual understanding.",
             QueryIntent.CLARIFICATION: "The query seeks to verify or confirm information.",
             QueryIntent.DISCUSSION: "The query invites exploration or opinion on a topic.",
-            QueryIntent.EMERGENCY: "The query indicates an urgent situation requiring immediate attention."
+            QueryIntent.EMERGENCY: "The query indicates an urgent situation requiring immediate attention.",
+            QueryIntent.GREETING: "The query is a simple greeting or salutation.",
+            QueryIntent.SMALL_TALK: "The query is casual conversation not requiring technical information.",
+            QueryIntent.ACKNOWLEDGMENT: "The query acknowledges previous information or expresses thanks."
         }
         
         return intent_reasons.get(primary_intent, "Based on query pattern analysis")
