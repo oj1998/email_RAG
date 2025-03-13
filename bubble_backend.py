@@ -33,6 +33,7 @@ from weighted_memory import WeightedConversationMemory
 from format_mapper import FormatMapper, CategoryFormat, FormatStyle
 from query_intent import SmartQueryIntentAnalyzer, QueryIntent, IntentAnalysis
 from smart_response_generator import SmartResponseGenerator
+from enhanced_similarity import EnhancedSmartResponseGenerator, EnhancedSourceAttribution
 
 import aiohttp
 import tempfile
@@ -517,7 +518,7 @@ async def process_document_query(
     request: QueryRequest,
     conversation_context: Optional[Dict] = None
 ) -> Dict[str, Any]:
-    """Enhanced document query processing with conversation context and classification"""
+    """Enhanced document query processing with improved source attribution"""
     start_time = datetime.utcnow()
     
     if not pool or not vector_store:
@@ -531,40 +532,37 @@ async def process_document_query(
             current_context=request.context.dict()
         )
 
-        # NEW: Perform intent analysis early in the flow
+        # Perform intent analysis
         intent_analyzer = SmartQueryIntentAnalyzer()
         intent_analysis = await intent_analyzer.analyze(
             request.query, 
             request.context.dict()
         )
         
-        # Initialize smart response generator for source determination
-        source_handler = SmartResponseGenerator(
+        # Initialize enhanced response generator
+        enhanced_source_handler = EnhancedSmartResponseGenerator(
             llm=ChatOpenAI(
                 model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
                 temperature=0.7
             ),
             vector_store=vector_store,
-            classifier=classifier
+            classifier=classifier,
+            min_confidence=0.6  # Adjustable threshold
         )
         
-        # Check if we need sources for this query - UPDATED: pass intent_analysis
-        needs_sources = await source_handler.should_use_sources(
+        # Check if we need sources for this query
+        needs_sources = await enhanced_source_handler.should_use_sources(
             query=request.query,
             classification=classification,
-            intent_analysis=intent_analysis  # Pass the intent analysis
+            intent_analysis=intent_analysis
         )
         
-        # Configure search based on classification
-        search_kwargs = {"filter": {}, "k": 5}
+        # Configure search based on classification and request
+        metadata_filter = {}
         if request.document_ids:
-            search_kwargs["filter"]["document_id"] = {"$in": request.document_ids}
+            metadata_filter["document_id"] = {"$in": request.document_ids}
         if request.metadata_filter:
-            search_kwargs["filter"].update(request.metadata_filter)
-
-        # Adjust search based on classification and source needs
-        if classification.confidence > 0.7 or needs_sources:
-            search_kwargs["k"] = 8 if classification.category == "SAFETY" else 5
+            metadata_filter.update(request.metadata_filter)
 
         # Initialize memory with conversation history
         memory = WeightedConversationMemory(
@@ -582,35 +580,79 @@ async def process_document_query(
                     msg_type = HumanMessage if message.get("role") == "user" else AIMessage
                     memory.chat_memory.add_message(msg_type(content=message.get("content", "")))
 
-        # Get retriever
-        retriever = vector_store.as_retriever(search_kwargs=search_kwargs)
+        # Get relevant documents directly using the enhanced method
+        if needs_sources:
+            documents = await enhanced_source_handler._get_relevant_documents(
+                query=request.query,
+                classification=classification,
+                metadata_filter=metadata_filter,
+                k=8 if classification.category == "SAFETY" else 5
+            )
+        else:
+            documents = []
 
-        # Initialize QA chain with appropriate model based on classification
-        qa = ConversationalRetrievalChain.from_llm(
-            llm=ChatOpenAI(
-                model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
-                temperature=0.7
-            ),
-            retriever=retriever,
-            memory=memory,
-            return_source_documents=True,
-            verbose=True
-        )
+        # Initialize QA chain with appropriate model
+        if documents:
+            # Create retriever with documents
+            from langchain.schema import Document
+            from langchain.retrievers.document_compressors import DocumentCompressorPipeline
+            from langchain.retrievers import ContextualCompressionRetriever
 
-        # Execute chain with classification context
-        chain_response = await asyncio.get_event_loop().run_in_executor(
-            None, 
-            lambda: qa({
-                "question": request.query,
-                "chat_history": memory.chat_memory.messages
-            })
-        )
+            # Create a simple retriever from the documents
+            from langchain.retrievers import TimeWeightedVectorStoreRetriever
+            
+            retriever = vector_store.as_retriever(
+                search_kwargs={
+                    "k": len(documents),
+                    "filter": metadata_filter if metadata_filter else None
+                }
+            )
+            
+            qa = ConversationalRetrievalChain.from_llm(
+                llm=ChatOpenAI(
+                    model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
+                    temperature=0.7
+                ),
+                retriever=retriever,
+                memory=memory,
+                return_source_documents=True,
+                verbose=True
+            )
+            
+            # Execute chain with classification context
+            chain_response = await asyncio.get_event_loop().run_in_executor(
+                None, 
+                lambda: qa({
+                    "question": request.query,
+                    "chat_history": memory.chat_memory.messages
+                })
+            )
+            
+            response_content = chain_response.get("answer", "No response generated")
+            source_documents = chain_response.get("source_documents", [])
+        else:
+            # For queries that don't need sources
+            simple_qa = ConversationalChain.from_llm(
+                llm=ChatOpenAI(
+                    model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
+                    temperature=0.7
+                ),
+                memory=memory,
+                verbose=True
+            )
+            
+            chain_response = await asyncio.get_event_loop().run_in_executor(
+                None, 
+                lambda: simple_qa({
+                    "question": request.query,
+                    "chat_history": memory.chat_memory.messages
+                })
+            )
+            
+            response_content = chain_response.get("answer", "No response generated")
+            source_documents = []
 
-        # Process response
-        response_content = chain_response.get("answer", "No response generated")
-        source_documents = chain_response.get("source_documents", [])
-
-        # Transform content based on classification
+        # Transform content based on classification and intent
         transformer = NLPTransformer()
         
         formatted_response, intent_analysis = await transformer.transform_content(
@@ -621,10 +663,10 @@ async def process_document_query(
             classification=classification.dict()
         )
 
-        # If we're using sources, extract smart attributions
+        # If we're using sources, extract attributions with the enhanced method
         source_attributions = []
         if needs_sources and source_documents:
-            source_attributions = await source_handler._extract_attributions(
+            source_attributions = await enhanced_source_handler._extract_attributions(
                 response_content,
                 source_documents,
                 classification
@@ -632,37 +674,52 @@ async def process_document_query(
 
         # Calculate processing time
         processing_time = (datetime.utcnow() - start_time).total_seconds()
-
-
-
+        
+        # Prepare sources for response
+        sources = []
+        if needs_sources and source_attributions:
+            for attr in source_attributions:
+                # Check if this is an EnhancedSourceAttribution
+                if hasattr(attr, 'semantic_similarity'):
+                    # Include enhanced attributes
+                    sources.append({
+                        "id": attr.source_id,
+                        "title": attr.title or next(
+                            (doc.metadata.get("title") for doc in source_documents 
+                             if doc.metadata.get("document_id") == attr.source_id),
+                            "Unknown Document"
+                        ),
+                        "page": attr.page_number,
+                        "confidence": attr.confidence,
+                        "semantic_similarity": attr.semantic_similarity,
+                        "content_overlap": attr.content_overlap,
+                        "excerpt": attr.content,
+                        "document_type": attr.document_type
+                    })
+                else:
+                    # Standard attribution format
+                    sources.append({
+                        "id": attr.source_id,
+                        "title": next(
+                            (doc.metadata.get("title") for doc in source_documents 
+                             if doc.metadata.get("document_id") == attr.source_id),
+                            "Unknown Document"
+                        ),
+                        "page": attr.page_number,
+                        "confidence": attr.confidence,
+                        "excerpt": attr.content
+                    })
+        
         format_mapper = FormatMapper()
         category_format = format_mapper.get_format_for_category(classification.category)
         validation_errors = []
 
-
-        
         # Prepare response
         response = {
             "status": "success",
             "answer": formatted_response,
             "classification": classification.dict(),
-            "sources": [
-                {
-                    "id": doc.metadata.get("document_id"),
-                    "title": doc.metadata.get("title"),
-                    "page": doc.metadata.get("page"),
-                    "confidence": next(
-                        (attr.confidence for attr in source_attributions 
-                         if attr.source_id == doc.metadata.get("document_id")),
-                        0.0
-                    ),
-                    "excerpt": next(
-                        (attr.content for attr in source_attributions 
-                         if attr.source_id == doc.metadata.get("document_id")),
-                        None
-                    )
-                } for doc in source_documents
-            ] if needs_sources else [],
+            "sources": sources,
             "metadata": ResponseMetadata(
                 category=classification.category,
                 confidence=classification.confidence,
@@ -670,7 +727,6 @@ async def process_document_query(
                 processing_time=processing_time,
                 conversation_context_used=bool(conversation_context),
                 intent_analysis=intent_analysis.dict(),
-                # Add these lines:
                 format_used=getattr(category_format, 'style', FormatStyle.NARRATIVE).value 
                            if hasattr(category_format, 'style') else "unknown",
                 format_validation_errors=validation_errors if 'validation_errors' in locals() else []
