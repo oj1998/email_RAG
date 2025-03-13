@@ -94,6 +94,20 @@ class FormatMapper:
                     "cite_code_sections": "required",
                     "use_block_quotes": "true"
                 }
+            ),
+
+            "COMPARISON": CategoryFormat(
+                style=FormatStyle.SPECIFICATION,
+                required_sections=["OPTIONS", "CRITERIA", "RECOMMENDATIONS"],
+                formatting_rules={
+                    "use_tables": "recommended",
+                    "highlight_pros_cons": "true",
+                    "color_code_comparison": "optional"
+                },
+                validation_rules={
+                    "min_options": "2",
+                    "balanced_criteria": "true"
+                }
             )
         }
         
@@ -148,6 +162,8 @@ class FormatMapper:
         Validate that the content contains all required sections.
         Returns a list of missing section names, or an empty list if all required sections are present.
         """
+        missing_sections = []
+                            
         # Handle the case where a string (category) is passed instead of a CategoryFormat
         if isinstance(format_spec_or_category, str):
             format_spec = self.get_format_for_category(format_spec_or_category)
@@ -463,3 +479,157 @@ class FormatMapper:
                 lines[i] = f"## {section_name}"
         
         return '\n'.join(lines)
+
+    def _format_comparisons(self, content: str) -> str:
+        """Format comparison content with tables, pros/cons highlighting, and color coding"""
+        
+        # 1. Detect and format pros/cons lists
+        pros_pattern = r'(?:Pros|Advantages|Benefits)[:;]\s*(.*?)(?=\n\n|\n(?:Cons|Disadvantages|Drawbacks):|\Z)'
+        cons_pattern = r'(?:Cons|Disadvantages|Drawbacks)[:;]\s*(.*?)(?=\n\n|\Z)'
+        
+        # Format pros with checkmarks
+        content = re.sub(
+            pros_pattern,
+            lambda m: "**Pros:**\n" + "\n".join([f"✅ {item.strip()}" for item in re.split(r'[-•*]\s*', m.group(1)) if item.strip()]),
+            content,
+            flags=re.DOTALL | re.IGNORECASE
+        )
+        
+        # Format cons with x marks
+        content = re.sub(
+            cons_pattern,
+            lambda m: "**Cons:**\n" + "\n".join([f"❌ {item.strip()}" for item in re.split(r'[-•*]\s*', m.group(1)) if item.strip()]),
+            content,
+            flags=re.DOTALL | re.IGNORECASE
+        )
+        
+        # 2. Format option comparisons in tabular format
+        # Look for potential table-like comparisons
+        comparison_pattern = r'(?:Option|Alternative|Material|Method|Type)\s*\d+\s*:\s*(.*?)(?=(?:Option|Alternative|Material|Method|Type)\s*\d+\s*:|$)'
+        options = re.findall(comparison_pattern, content, re.IGNORECASE)
+        
+        if len(options) >= 2:
+            # Convert option descriptions to a more tabular format
+            table_content = "| Option | Description | Key Features |\n| --- | --- | --- |\n"
+            
+            for i, option in enumerate(options, 1):
+                # Split option text on first period to separate description from details
+                parts = option.split('.', 1)
+                desc = parts[0].strip()
+                features = parts[1].strip() if len(parts) > 1 else ""
+                
+                # Extract key features if present
+                features_formatted = ", ".join([f.strip() for f in features.split(',')])
+                
+                table_content += f"| Option {i} | {desc} | {features_formatted} |\n"
+            
+            # Replace the options section with the table
+            for i, option in enumerate(options, 1):
+                option_pattern = re.escape(f"Option {i}: {option}")
+                content = re.sub(option_pattern, "", content)
+                
+            # Add table at the start of the OPTIONS section
+            options_section_pattern = r'(## OPTIONS)'
+            content = re.sub(options_section_pattern, r'\1\n\n' + table_content, content)
+        
+        # 3. Format criteria comparison
+        criteria_pattern = r'## CRITERIA\s*(.*?)(?=\n##|\Z)'
+        criteria_match = re.search(criteria_pattern, content, re.DOTALL)
+        
+        if criteria_match:
+            criteria_text = criteria_match.group(1)
+            criteria_items = re.findall(r'[-•*]\s*(.*?)(?=\n[-•*]|\Z)', criteria_text, re.DOTALL)
+            
+            if criteria_items:
+                # Format criteria as a structured list
+                formatted_criteria = "\n\n"
+                
+                for i, item in enumerate(criteria_items, 1):
+                    item = item.strip()
+                    if ':' in item:
+                        # Format criterion with name and description
+                        name, desc = item.split(':', 1)
+                        formatted_criteria += f"**{i}. {name.strip()}**: {desc.strip()}\n\n"
+                    else:
+                        formatted_criteria += f"**{i}.** {item}\n\n"
+                
+                # Replace original criteria text
+                content = content.replace(criteria_text, formatted_criteria)
+        
+        # 4. Enhance recommendations with visual markers
+        recommendations_pattern = r'## RECOMMENDATIONS\s*(.*?)(?=\n##|\Z)'
+        recommendations_match = re.search(recommendations_pattern, content, re.DOTALL)
+        
+        if recommendations_match:
+            recommendations_text = recommendations_match.group(1)
+            
+            # Add star emoji to the best/recommended option
+            best_option_pattern = r'(?:best|recommended|preferred) (?:option|choice|alternative) (?:is|would be)\s*(.*?)(?=\.|\n)'
+            content = re.sub(
+                best_option_pattern,
+                r'best option is ⭐ \1',
+                content,
+                flags=re.IGNORECASE
+            )
+            
+            # Format any decision criteria summaries
+            criteria_summary_pattern = r'based on\s*(.*?),\s*(.*?)(?=\.|\n)'
+            content = re.sub(
+                criteria_summary_pattern,
+                r'based on **\1**, \2',
+                content,
+                flags=re.IGNORECASE
+            )
+        
+        return content
+
+    def _apply_specification_format(self, content: str, format_spec: CategoryFormat) -> str:
+        """Format with specifications highlighted and structured"""
+        # Ensure section headers are properly formatted
+        content = self._ensure_section_formatting(content)
+        
+        # Apply comparison formatting if needed
+        if format_spec.formatting_rules.get("highlight_pros_cons") == "true":
+            content = self._format_comparisons(content)
+        
+        # Highlight key terms
+        if format_spec.formatting_rules.get("highlight_key_terms") == "true":
+            content = self._highlight_key_terms(content)
+        
+        # Add block quotes for code sections if required
+        if format_spec.formatting_rules.get("use_block_quotes") == "true":
+            content = self._add_block_quotes(content)
+            
+        # Format specifications in key-value format
+        content = self._format_specifications(content)
+        
+        return content
+        
+    def _format_specifications(self, content: str) -> str:
+        """Format specification items in key-value format"""
+        # Look for specification patterns like "Key: Value" or "Parameter: Value"
+        spec_pattern = r'(?:^|\n)([A-Z][a-zA-Z\s]+):\s*([^\n]+)'
+        
+        content = re.sub(
+            spec_pattern,
+            r'\n**\1:** \2',
+            content
+        )
+        
+        # Format dimensions and measurements
+        dimension_pattern = r'(\d+(?:\.\d+)?)\s*(mm|cm|m|in|ft)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m|in|ft)'
+        content = re.sub(
+            dimension_pattern,
+            r'**\1\2 × \3\4**',
+            content
+        )
+        
+        # Format numeric specifications
+        numeric_spec_pattern = r'(\d+(?:\.\d+)?)\s*(PSI|kPa|MPa|kg|lb|°C|°F)'
+        content = re.sub(
+            numeric_spec_pattern,
+            r'**\1\2**',
+            content
+        )
+        
+        return content
