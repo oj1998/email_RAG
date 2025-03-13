@@ -531,6 +531,13 @@ async def process_document_query(
             current_context=request.context.dict()
         )
 
+        # NEW: Perform intent analysis early in the flow
+        intent_analyzer = SmartQueryIntentAnalyzer()
+        intent_analysis = await intent_analyzer.analyze(
+            request.query, 
+            request.context.dict()
+        )
+        
         # Initialize smart response generator for source determination
         source_handler = SmartResponseGenerator(
             llm=ChatOpenAI(
@@ -541,10 +548,11 @@ async def process_document_query(
             classifier=classifier
         )
         
-        # Check if we need sources for this query
+        # Check if we need sources for this query - UPDATED: pass intent_analysis
         needs_sources = await source_handler.should_use_sources(
             query=request.query,
-            classification=classification
+            classification=classification,
+            intent_analysis=intent_analysis  # Pass the intent analysis
         )
         
         # Configure search based on classification
