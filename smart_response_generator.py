@@ -5,6 +5,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.vectorstores import VectorStore
 from construction_classifier import ConstructionClassifier, QuestionType
+from query_intent import QueryIntent
 import logging
 
 logger = logging.getLogger(__name__)
@@ -66,19 +67,46 @@ class SmartResponseGenerator:
     async def should_use_sources(
         self,
         query: str,
-        classification: QuestionType
+        classification: QuestionType,
+        intent_analysis=None
     ) -> bool:
-        """Determine if the query requires source retrieval"""
+        """Determine if the query requires source retrieval
         
-        # Short, simple responses that don't need sources
-        if len(query.strip()) < 15:  # Very short queries
-            return False
-        
-        # Categories that don't need sources
-        no_source_categories = ["GREETING", "CLARIFICATION", "SMALL_TALK", "ACKNOWLEDGMENT"]
-        if classification.category in no_source_categories:
-            return False
+        Args:
+            query: The user's question
+            classification: The category classification
+            intent_analysis: Optional intent analysis result (IntentAnalysis object)
             
+        Returns:
+            bool: Whether sources should be used for this query
+        """
+        # Very short queries likely don't need sources
+        if len(query.strip()) < 15:
+            return False
+        
+        # Intent-based determination (if intent_analysis is provided)
+        if intent_analysis and hasattr(intent_analysis, 'primary_intent'):
+            # These intents don't need sources
+            no_source_intents = [
+                QueryIntent.GREETING,
+                QueryIntent.SMALL_TALK, 
+                QueryIntent.ACKNOWLEDGMENT,
+                QueryIntent.CLARIFICATION
+            ]
+            
+            if intent_analysis.primary_intent in no_source_intents:
+                return False
+                
+            # Emergency intent always needs sources for safety reasons
+            if intent_analysis.primary_intent == QueryIntent.EMERGENCY:
+                return True
+        # Fallback to category-based determination (original approach)
+        else:
+            # Categories that don't need sources
+            no_source_categories = ["GREETING", "CLARIFICATION", "SMALL_TALK", "ACKNOWLEDGMENT"]
+            if classification.category in no_source_categories:
+                return False
+        
         # For everything else, use a simple check for very basic responses
         if len(query.split()) <= 5:  # Queries with 5 or fewer words
             response = await self.llm.ainvoke(
