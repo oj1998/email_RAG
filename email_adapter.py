@@ -11,11 +11,30 @@ from langchain_community.chat_models import ChatOpenAI
 from loaders.vector_store_loader import VectorStoreFactory
 from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 
+# Import our new intent-based formatting system
+# Comment this out if you want to disable the new formatting system
+from Email_Output.email_output_adapter import EmailOutputManager
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
 # Global email QA system instance
 EMAIL_QA_SYSTEM = None
+
+# Initialize the email output manager for intent-based formatting
+# You can set this to None to disable the new formatting
+try:
+    EMAIL_OUTPUT_MANAGER = EmailOutputManager()
+    logger.info("Intent-based email formatting system initialized successfully")
+except ImportError:
+    logger.info("Intent-based email formatting system not available")
+    EMAIL_OUTPUT_MANAGER = None
+except Exception as e:
+    logger.warning(f"Failed to initialize intent-based email formatting: {e}")
+    EMAIL_OUTPUT_MANAGER = None
+
+# Enable/disable intent-based formatting with this flag
+USE_INTENT_FORMATTING = True
 
 # Type definitions without importing from models
 # This prevents circular imports
@@ -90,8 +109,12 @@ def extract_time_filters(context: Dict[str, Any]) -> Dict[str, str]:
     return filters
 
 async def process_email_query(query: str, conversation_id: str, context: Dict[str, Any] = None, email_filters: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Process an email-specific query"""
+    """Process an email-specific query with optional intent-based formatting"""
     try:
+        # Record start time for performance tracking
+        start_time = datetime.now()
+        
+        # Get QA system
         qa_system = await get_email_qa_system()
         
         # Handle filters
@@ -121,29 +144,59 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             )
         )
         
-        # Format sources
+        # Format sources with more details
         sources = [
             {
                 "id": email.metadata.get("email_id", "unknown"),
                 "title": email.metadata.get("subject", "Email"),
                 "sender": email.metadata.get("sender", "Unknown"),
+                "recipient": email.metadata.get("recipient", "Unknown Recipient"),
                 "date": email.metadata.get("date", ""),
-                "confidence": email.metadata.get("relevance_score", 0)
+                "confidence": email.metadata.get("relevance_score", 0),
+                "excerpt": email.page_content[:200] + "..." if len(email.page_content) > 200 else email.page_content
             }
             for email in relevant_emails
         ]
         
-        # Return response with metadata indicating this is an email query
+        # Calculate processing time
+        processing_time = (datetime.now() - start_time).total_seconds()
+        
+        # Prepare metadata
+        metadata = {
+            "query_type": "email",
+            "processing_time": processing_time,
+            "source_count": len(sources),
+            "conversation_context_used": bool(context and context.get("conversation_history")),
+            "filters_applied": filter_options
+        }
+        
+        # Apply intent-based formatting if enabled
+        if USE_INTENT_FORMATTING and EMAIL_OUTPUT_MANAGER is not None:
+            try:
+                logger.info(f"Applying intent-based formatting to email response for query: '{query}'")
+                formatted_response = await EMAIL_OUTPUT_MANAGER.process_response(
+                    query=query,
+                    raw_response=answer,
+                    sources=sources,
+                    context=context,
+                    metadata=metadata
+                )
+                
+                # Add formatting info to metadata
+                formatted_response["metadata"]["formatting_applied"] = True
+                
+                return formatted_response
+            except Exception as e:
+                logger.warning(f"Intent-based formatting failed: {str(e)}", exc_info=True)
+                logger.info("Falling back to standard response format")
+                # Continue with standard formatting if intent-based formatting fails
+        
+        # Return standard response if intent formatting is disabled or failed
         return {
             "status": "success",
             "answer": answer,
             "sources": sources,
-            "metadata": {
-                "query_type": "email",
-                "processing_time": 0.0,  # You might want to calculate actual processing time
-                "source_count": len(sources),
-                "conversation_context_used": bool(context and context.get("conversation_history"))
-            }
+            "metadata": metadata
         }
         
     except Exception as e:
@@ -166,12 +219,27 @@ def create_email_router():
                 detail="Query cannot be empty"
             )
         
-        return await process_email_query(
-            query=request.get("query"),
-            conversation_id=request.get("conversation_id"),
-            context=request.get("context"),
-            email_filters=request.get("email_filters")
-        )
+        # Check if intent formatting should be forced on or off for this request
+        force_intent_formatting = request.get("force_intent_formatting")
+        
+        # Store the original flag
+        original_flag = globals().get("USE_INTENT_FORMATTING")
+        
+        try:
+            # Override flag if specified in request
+            if force_intent_formatting is not None:
+                globals()["USE_INTENT_FORMATTING"] = force_intent_formatting
+                
+            return await process_email_query(
+                query=request.get("query"),
+                conversation_id=request.get("conversation_id"),
+                context=request.get("context"),
+                email_filters=request.get("email_filters")
+            )
+        finally:
+            # Restore original flag
+            if force_intent_formatting is not None:
+                globals()["USE_INTENT_FORMATTING"] = original_flag
     
     @router.get("/status")
     async def email_system_status():
@@ -181,6 +249,8 @@ def create_email_router():
             return {
                 "status": "healthy",
                 "initialized": qa_system is not None,
+                "intent_formatting_available": EMAIL_OUTPUT_MANAGER is not None,
+                "intent_formatting_enabled": USE_INTENT_FORMATTING,
                 "timestamp": datetime.utcnow().isoformat()
             }
         except Exception as e:
@@ -189,6 +259,18 @@ def create_email_router():
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat()
             }
+    
+    @router.post("/toggle_formatting")
+    async def toggle_intent_formatting(enabled: bool = True):
+        """Toggle intent-based formatting on or off"""
+        global USE_INTENT_FORMATTING
+        previous_value = USE_INTENT_FORMATTING
+        USE_INTENT_FORMATTING = enabled
+        return {
+            "status": "success",
+            "intent_formatting_enabled": USE_INTENT_FORMATTING,
+            "previous_value": previous_value
+        }
     
     return router
 
