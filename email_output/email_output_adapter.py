@@ -59,6 +59,12 @@ class EmailOutputManager:
             start_time = datetime.now()
             intent_analysis = await self.intent_detector.detect_intent(query, context)
             intent_detection_time = (datetime.now() - start_time).total_seconds()
+
+            logger.info(f"Query: '{query}'")
+            logger.info(f"Detected intent: {intent_analysis.primary_intent.value} (confidence: {intent_analysis.metadata.confidence:.2f})")
+            if intent_analysis.secondary_intent:
+                logger.info(f"Secondary intent: {intent_analysis.secondary_intent.value}")
+            logger.info(f"Intent reasoning: {intent_analysis.metadata.reasoning}")
             
             logger.info(f"Detected intent for query '{query}': {intent_analysis.primary_intent.value} " +
                        f"(confidence: {intent_analysis.metadata.confidence:.2f})")
