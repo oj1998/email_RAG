@@ -13,7 +13,7 @@ from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 
 # Import our new intent-based formatting system
 # Comment this out if you want to disable the new formatting system
-from Email_Output.email_output_adapter import EmailOutputManager
+from email_output.email_output_adapter import EmailOutputManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
