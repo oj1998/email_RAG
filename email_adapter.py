@@ -181,6 +181,11 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
                     context=context,
                     metadata=metadata
                 )
+
+                if "metadata" in formatted_response and "intent" in formatted_response["metadata"]:
+                    intent_info = formatted_response["metadata"]["intent"]
+                    logger.info(f"Intent detection result: {intent_info['primary']} (confidence: {intent_info['confidence']:.2f})")
+                    logger.info(f"Formatting applied using style: {formatted_response['metadata'].get('formatting', {}).get('style', 'unknown')}")
                 
                 # Add formatting info to metadata
                 formatted_response["metadata"]["formatting_applied"] = True
