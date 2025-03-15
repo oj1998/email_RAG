@@ -17,4 +17,4 @@ __all__ = [
     'EmailFormatter',
     'EmailResponse',
     'EmailSource',
-    'Email
+    'Email']
