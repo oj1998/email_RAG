@@ -515,21 +515,35 @@ async def process_email_query(
         # Log detailed information about all emails
         if "emails" in response and response["emails"]:
             logger.info(f"Number of emails returned: {len(response['emails'])}")
+            logger.info("========== EMAIL DETAILS START ==========")
             
-            # Log each email with key information
             for i, email in enumerate(response["emails"]):
-                logger.info(f"Email {i+1}:")
-                logger.info(f"  ID: {email.get('id', 'No ID')}")
-                logger.info(f"  Subject: {email.get('subject', 'No subject')}")
-                logger.info(f"  Sender: {email.get('sender', 'No sender')}")
-                logger.info(f"  Date: {email.get('date', 'No date')}")
-                logger.info(f"  Confidence: {email.get('confidence', 'No confidence')}")
-                logger.info(f"  Summary: {email.get('summary', 'No summary')[:150]}...")
+                logger.info(f"========== EMAIL {i+1} OF {len(response['emails'])} ==========")
+                logger.info(f"ID:         {email.get('id', 'No ID')}")
+                logger.info(f"SUBJECT:    {email.get('subject', 'No subject')}")
+                logger.info(f"SENDER:     {email.get('sender', 'No sender')}")
+                logger.info(f"RECIPIENT:  {email.get('recipient', 'No recipient')}")
+                logger.info(f"DATE:       {email.get('date', 'No date')}")
+                logger.info(f"CONFIDENCE: {email.get('confidence', 'No confidence')}")
                 
-                # Optionally log a snippet of the content (first 100 chars)
-                if 'content' in email:
-                    content_snippet = email['content'][:100] + "..." if len(email['content']) > 100 else email['content']
-                    logger.info(f"  Content snippet: {content_snippet}")
+                # Log summary with clear formatting
+                summary = email.get('summary', 'No summary')
+                logger.info(f"SUMMARY:    {summary}")
+                
+                # Log a preview of content with clear formatting
+                if 'content' in email and email['content']:
+                    # Format the preview to be cleaner with line breaks replaced
+                    content = email['content']
+                    # Remove extra whitespace and replace newlines with spaces
+                    content = ' '.join([line.strip() for line in content.split('\n')])
+                    # Truncate if too long
+                    if len(content) > 300:
+                        content = content[:297] + "..."
+                    logger.info(f"CONTENT PREVIEW: {content}")
+                
+                logger.info("-----------------------------------------")
+            
+            logger.info("========== EMAIL DETAILS END ==========")
         else:
             logger.info("No emails returned in the response")
         
