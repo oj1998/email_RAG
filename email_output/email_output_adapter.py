@@ -6,9 +6,9 @@ import logging
 import asyncio
 from datetime import datetime
 
-# Import our components
+# Import our components - now using the enhanced formatter
 from .email_intent import EmailIntentDetector, EmailIntent
-from .enhanced_email_formatter import EnhancedEmailFormatter, EmailResponse, EmailSource, EmailFormatStyle
+from .enhanced_email_formatter import EnhancedEmailFormatter, EmailSource, EmailFormatStyle
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +17,14 @@ class EmailOutputManager:
     Manages the intent-based formatting of email query responses.
     
     This class serves as an adapter between the existing email processing
-    system and our new intent-based formatting system.
+    system and our intent-based formatting system.
     """
     
-    def __init__(self):
+    def __init__(self, llm=None):
         """Initialize the manager with intent detector and formatter"""
         self.intent_detector = EmailIntentDetector(use_embeddings=False, use_llm=True)
-        self.formatter = EmailFormatter()
+        # Use the enhanced formatter instead of the original
+        self.formatter = EnhancedEmailFormatter(llm=llm)
         
     async def process_response(
         self,
@@ -66,10 +67,15 @@ class EmailOutputManager:
                 logger.info(f"Secondary intent: {intent_analysis.secondary_intent.value}")
             logger.info(f"Intent reasoning: {intent_analysis.metadata.reasoning}")
             
-            logger.info(f"Detected intent for query '{query}': {intent_analysis.primary_intent.value} " +
-                       f"(confidence: {intent_analysis.metadata.confidence:.2f})")
+            # Check if this is an error response
+            is_error = False
+            if "sorry" in raw_response.lower() or "error" in raw_response.lower() or "cannot" in raw_response.lower():
+                # Simple heuristic to detect error messages
+                if "not reddit" in raw_response.lower() or "pinterest, not reddit" in raw_response.lower():
+                    is_error = True
+                    logger.info("Detected error response, using error formatting")
             
-            # 2. Format the response based on the detected intent
+            # 2. Format the response based on the detected intent using the enhanced formatter
             start_time = datetime.now()
             formatted_response = await self.formatter.format_response(
                 content=raw_response,
@@ -79,7 +85,8 @@ class EmailOutputManager:
                     **metadata,
                     "intent": intent_analysis.primary_intent.value,
                     "confidence": intent_analysis.metadata.confidence
-                }
+                },
+                is_error=is_error  # Pass the error flag to the formatter
             )
             formatting_time = (datetime.now() - start_time).total_seconds()
             
@@ -97,8 +104,9 @@ class EmailOutputManager:
                         "reasoning": intent_analysis.metadata.reasoning
                     },
                     "formatting": {
-                        "style": self.formatter.mappings[intent_analysis.primary_intent].primary_style.value,
-                        "processing_time": formatting_time
+                        "style": "error" if is_error else self.formatter.intent_formats[intent_analysis.primary_intent].style.value,
+                        "processing_time": formatting_time,
+                        "is_error": is_error
                     },
                     "processing_times": {
                         "intent_detection": intent_detection_time,
@@ -195,7 +203,7 @@ async def enhanced_process_email_query(
             "conversation_context_used": bool(context and context.get("conversation_history"))
         }
         
-        # Process with intent-based formatting
+        # Process with enhanced intent-based formatting
         output_manager = EmailOutputManager()
         formatted_response = await output_manager.process_response(
             query=query,
@@ -219,7 +227,6 @@ async def enhanced_process_email_query(
                 "query_type": "email"
             }
         }
-
 
 # Simple test for the integration
 async def test_integration():
