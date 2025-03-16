@@ -8,7 +8,7 @@ from datetime import datetime
 
 # Import our components
 from .email_intent import EmailIntentDetector, EmailIntent
-from .email_formatter import EmailFormatter, EmailSource, FormatStyle
+from .enhanced_email_formatter import EnhancedEmailFormatter, EmailResponse, EmailSource, EmailFormatStyle
 
 logger = logging.getLogger(__name__)
 
