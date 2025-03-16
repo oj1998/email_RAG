@@ -507,6 +507,23 @@ async def process_email_query(
                     "query_type": "email",
                     "conversation_used": bool(conversation_context)
                 }))
+
+        logger.info(f"Email query response structure: Keys = {list(response.keys())}")
+        logger.info(f"Answer content: {response.get('answer', 'No answer')[:100]}...")  # Log first 100 chars
+        
+        # Log email information if present
+        if "emails" in response and response["emails"]:
+            logger.info(f"Number of emails returned: {len(response['emails'])}")
+            # Log details of first email
+            first_email = response["emails"][0]
+            logger.info(f"First email - Subject: {first_email.get('subject')}, Sender: {first_email.get('sender')}")
+            logger.info(f"First email summary: {first_email.get('summary', 'No summary')[:100]}...")
+        else:
+            logger.info("No emails returned in the response")
+        
+        # Log metadata
+        if "metadata" in response:
+            logger.info(f"Response metadata: {response['metadata']}")
         
         return response
         
