@@ -63,12 +63,11 @@ class EnhancedEmailFormatter:
                     "highlight_matches": "true",
                     "include_relevance": "true"
                 },
-                template="""# Search Results
-
-{content}
-
-## Sources
-{sources}"""
+                template="""SEARCH RESULTS:
+    {content}
+    
+    SOURCES:
+    {sources}"""
             ),
             
             EmailIntent.SUMMARIZE: EmailCategoryFormat(
@@ -78,12 +77,11 @@ class EnhancedEmailFormatter:
                     "highlight_key_points": "true",
                     "include_date_range": "true"
                 },
-                template="""# Email Summary
-
-{content}
-
-## Based On
-{sources}"""
+                template="""EMAIL SUMMARY:
+    {content}
+    
+    BASED ON:
+    {sources}"""
             ),
             
             EmailIntent.EXTRACT: EmailCategoryFormat(
@@ -93,12 +91,11 @@ class EnhancedEmailFormatter:
                     "highlight_extracted_items": "true",
                     "use_clear_labels": "true"
                 },
-                template="""# Extracted Information
-
-{content}
-
-## Sources
-{sources}"""
+                template="""EXTRACTED INFORMATION:
+    {content}
+    
+    SOURCES:
+    {sources}"""
             ),
             
             EmailIntent.ANALYZE: EmailCategoryFormat(
@@ -108,12 +105,11 @@ class EnhancedEmailFormatter:
                     "highlight_insights": "true",
                     "use_sections": "true"
                 },
-                template="""# Analysis
-
-{content}
-
-## Data Sources
-{sources}"""
+                template="""ANALYSIS:
+    {content}
+    
+    DATA SOURCES:
+    {sources}"""
             ),
             
             EmailIntent.COMPOSE: EmailCategoryFormat(
@@ -123,24 +119,22 @@ class EnhancedEmailFormatter:
                     "format_as_email": "true",
                     "include_subject_line": "true"
                 },
-                template="""# Draft Email
-
-{content}"""
+                template="""DRAFT EMAIL:
+    {content}"""
             ),
             
             EmailIntent.LIST: EmailCategoryFormat(
-                style=EmailFormatStyle.TABULAR,
+                style=EmailFormatStyle.BULLET,
                 required_sections=["EMAIL LIST", "QUERY DETAILS"],
                 formatting_rules={
-                    "use_table_format": "true",
+                    "use_bullet_points": "true",
                     "number_items": "true"
                 },
-                template="""# Email List
-
-{content}
-
-## Query Details
-{metadata}"""
+                template="""EMAIL LIST:
+    {content}
+    
+    QUERY DETAILS:
+    {metadata}"""
             ),
             
             EmailIntent.COUNT: EmailCategoryFormat(
@@ -150,9 +144,8 @@ class EnhancedEmailFormatter:
                     "highlight_numbers": "true",
                     "include_time_period": "true"
                 },
-                template="""# Count Results
-
-{content}"""
+                template="""COUNT RESULTS:
+    {content}"""
             ),
             
             EmailIntent.FORWARD: EmailCategoryFormat(
@@ -162,12 +155,11 @@ class EnhancedEmailFormatter:
                     "preserve_formatting": "true",
                     "include_header_info": "true"
                 },
-                template="""# Email Content to Forward
-
-{content}
-
-## Original Email Details
-{sources}"""
+                template="""EMAIL CONTENT TO FORWARD:
+    {content}
+    
+    ORIGINAL EMAIL DETAILS:
+    {sources}"""
             ),
             
             EmailIntent.ORGANIZE: EmailCategoryFormat(
@@ -177,12 +169,11 @@ class EnhancedEmailFormatter:
                     "use_bullet_points": "true",
                     "group_by_category": "true"
                 },
-                template="""# Organization Suggestion
-
-{content}
-
-## Affected Emails
-{sources}"""
+                template="""ORGANIZATION SUGGESTION:
+    {content}
+    
+    AFFECTED EMAILS:
+    {sources}"""
             ),
             
             EmailIntent.CONVERSATIONAL: EmailCategoryFormat(
@@ -196,7 +187,7 @@ class EnhancedEmailFormatter:
             )
         }
         
-        # Special format for error messages
+        # Also update the error format
         self.error_format = EmailCategoryFormat(
             style=EmailFormatStyle.ERROR,
             required_sections=["ERROR MESSAGE", "ALTERNATIVES"],
@@ -204,18 +195,11 @@ class EnhancedEmailFormatter:
                 "highlight_error": "true",
                 "provide_alternatives": "true"
             },
-            template="""# Sorry, I couldn't process that request
-
-{content}
-
-## What you can try instead
-{alternatives}"""
-        )
-        
-        # Default format as fallback
-        self.default_format = EmailCategoryFormat(
-            style=EmailFormatStyle.NARRATIVE,
-            template="{content}"
+            template="""SORRY, I COULDN'T PROCESS THAT REQUEST:
+    {content}
+    
+    WHAT YOU CAN TRY INSTEAD:
+    {alternatives}"""
         )
     
     async def format_response(self, 
@@ -397,57 +381,47 @@ class EnhancedEmailFormatter:
         else:  # Default to narrative
             return self._format_narrative(content, format_spec)
     
-    async def _format_tabular(self, content: str, format_spec: EmailCategoryFormat) -> str:
-        """Format content in a tabular style with rows and columns"""
-        # Check if content already has table markdown
-        if "|" in content and "---" in content:
-            return content
-            
-        # If we should use table format but content isn't in a table
+    def _format_tabular(self, content: str, format_spec: EmailCategoryFormat) -> str:
+        """Format content in a tabular style that won't include raw formatting syntax"""
+        # For LIST intent, create a clean structured format
         if format_spec.formatting_rules.get("use_table_format") == "true":
-            # Try to extract list items or key-value pairs to create a table
+            # Try to extract list items or key-value pairs
             list_items = re.findall(r'(?:^|\n)[-•*]\s*([^\n]+)', content)
             
             if list_items:
-                # Create a table from list items
-                table = "| # | Item |\n|---|---|\n"
+                # Create a simple section-based structure instead of a table
+                formatted = "EMAIL LIST:\n"
                 for i, item in enumerate(list_items, 1):
-                    table += f"| {i} | {item.strip()} |\n"
-                    
-                # Replace bullet list with table
-                for item in list_items:
-                    content = content.replace(f"- {item.strip()}", "")
-                    content = content.replace(f"* {item.strip()}", "")
-                    content = content.replace(f"• {item.strip()}", "")
-                
-                # Add table to content
-                content = re.sub(r'\n{2,}', '\n\n', content)  # Clean up multiple newlines
-                content = content.strip() + "\n\n" + table
-            else:
-                # Try key-value extraction
-                key_values = re.findall(r'(?:^|\n)([^:\n]+):\s*([^\n]+)', content)
-                
-                if key_values:
-                    table = "| Field | Value |\n|---|---|\n"
-                    for key, value in key_values:
-                        table += f"| {key.strip()} | {value.strip()} |\n"
-                        
-                    # Replace original key-values with table
-                    for key, value in key_values:
-                        content = content.replace(f"{key}: {value}", "")
-                        
-                    # Add table to content
-                    content = re.sub(r'\n{2,}', '\n\n', content)  # Clean up multiple newlines
-                    content = content.strip() + "\n\n" + table
+                    formatted += f"{i}. {item.strip()}\n"
+                return formatted
+            
+            # For key-value data, create labeled sections
+            key_values = re.findall(r'(?:^|\n)([^:\n]+):\s*([^\n]+)', content)
+            
+            if key_values:
+                formatted = ""
+                for key, value in key_values:
+                    formatted += f"{key.strip().upper()}:\n{value.strip()}\n\n"
+                return formatted
         
-        # Number items if requested
-        if format_spec.formatting_rules.get("number_items") == "true":
-            # Number any remaining list items
-            content = re.sub(
-                r'(?:^|\n)[-•*]\s*([^\n]+)',
-                lambda m, count=[0]: f"\n{count[0]+1}. {m.group(1)}" if not (count.__setitem__(0, count[0]+1) or True) else "",
-                content
-            )
+        # If content already contains table-like structures, convert to simple format
+        if "|" in content and "---" in content:
+            # Extract table data while removing markdown syntax
+            lines = content.split("\n")
+            clean_lines = []
+            
+            for line in lines:
+                if "|" in line and "---" not in line:
+                    # This is a data row, extract content without pipes
+                    cells = [cell.strip() for cell in line.split("|") if cell.strip()]
+                    if len(cells) >= 2:
+                        clean_lines.append(f"{cells[0]}: {cells[1]}")
+                    else:
+                        clean_lines.append(line)
+                elif "---" not in line:  # Skip separator rows
+                    clean_lines.append(line)
+            
+            return "\n".join(clean_lines)
         
         return content
     
