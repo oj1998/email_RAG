@@ -163,11 +163,11 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             # Generate summary using existing LLM
             try:
                 summary_prompt = f"Summarize this email in 1-2 concise sentences:\n\n{email_content}"
-                summary_response = qa_system.llm(summary_prompt)
+                summary_response = qa_system.llm.invoke(summary_prompt)
                 summary = summary_response.content.strip() if hasattr(summary_response, 'content') else str(summary_response).strip()
             except Exception as e:
                 logger.warning(f"Error generating email summary: {e}")
-                summary = "Summary unavailable."
+                summary = f"Email appears to be from {email.metadata.get('sender', 'unknown')} regarding {email.metadata.get('subject', 'unknown topic')}."
             
             # Add to summarized emails list
             summarized_emails.append({
