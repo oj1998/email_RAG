@@ -503,7 +503,7 @@ async def process_email_query(
                 VALUES ($1, $2, $3, $4)
             """, 'assistant', response["answer"], request.conversation_id,
                 json.dumps({
-                    "sources": response.get("sources", []),
+                    "emails": response.get("emails", []),  # <-- Updated to use emails
                     "query_type": "email",
                     "conversation_used": bool(conversation_context)
                 }))
@@ -513,6 +513,7 @@ async def process_email_query(
     except Exception as e:
         logger.error(f"Error in email query processing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 async def process_document_query(
     request: QueryRequest,
@@ -782,6 +783,7 @@ async def query_documents(request: QueryRequest):
         logger.info(f"Routing decision: {'EMAIL' if use_email_processing else 'DOCUMENT'} processing")
         
         # Process query with context
+        # This is likely in your main query endpoint or in the query_documents function
         if use_email_processing:
             logger.info("Starting email query processing")
             response = await process_email_query(
@@ -822,7 +824,8 @@ async def query_documents(request: QueryRequest):
             role='assistant',
             content=response["answer"],
             metadata={
-                "sources": response.get("sources", []),
+                "emails": response.get("emails", []) if use_email_processing else [],
+                "sources": response.get("sources", []) if not use_email_processing else [],
                 "classification": response.get("classification", {}),
                 "metadata": response.get("metadata", {}),
                 "query_type": "email" if use_email_processing else "document",
