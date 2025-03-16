@@ -11,30 +11,14 @@ from langchain_community.chat_models import ChatOpenAI
 from loaders.vector_store_loader import VectorStoreFactory
 from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 
-# Import our new intent-based formatting system
-# Comment this out if you want to disable the new formatting system
-from email_output.email_output_adapter import EmailOutputManager
+# Import our intent detection system
+from email_output.email_intent import EmailIntentDetector, EmailIntent
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 # Global email QA system instance
 EMAIL_QA_SYSTEM = None
-
-# Initialize the email output manager for intent-based formatting
-# You can set this to None to disable the new formatting
-try:
-    EMAIL_OUTPUT_MANAGER = EmailOutputManager()
-    logger.info("Intent-based email formatting system initialized successfully")
-except ImportError:
-    logger.info("Intent-based email formatting system not available")
-    EMAIL_OUTPUT_MANAGER = None
-except Exception as e:
-    logger.warning(f"Failed to initialize intent-based email formatting: {e}")
-    EMAIL_OUTPUT_MANAGER = None
-
-# Enable/disable intent-based formatting with this flag
-USE_INTENT_FORMATTING = True
 
 # Type definitions without importing from models
 # This prevents circular imports
@@ -108,8 +92,35 @@ def extract_time_filters(context: Dict[str, Any]) -> Dict[str, str]:
             
     return filters
 
+async def generate_intent_based_answer(query: str, intent: EmailIntent, emails: List[Dict], llm) -> str:
+    """Generate an overall answer based on intent and retrieved emails"""
+    
+    if not emails:
+        return "I couldn't find any emails matching your query."
+    
+    # Create a prompt based on the intent
+    email_count = len(emails)
+    
+    intent_prompts = {
+        EmailIntent.SEARCH: f"I searched for emails matching '{query}' and found {email_count} relevant results. Here's what I found:",
+        EmailIntent.SUMMARIZE: f"Based on your request, I found {email_count} relevant emails. Here's a summary of the key information:",
+        EmailIntent.LIST: f"Here's a list of {email_count} emails that match your query:",
+        EmailIntent.EXTRACT: f"I've extracted information from {email_count} relevant emails based on your query:",
+        EmailIntent.ANALYZE: f"After analyzing {email_count} relevant emails, here's what I found:",
+        EmailIntent.COUNT: f"I found {email_count} emails matching your criteria.",
+        EmailIntent.FORWARD: f"I found {email_count} emails that you might want to forward:",
+        EmailIntent.ORGANIZE: f"I found {email_count} emails that could be organized:",
+        EmailIntent.COMPOSE: f"Based on {email_count} related emails, here's some information to help compose your message:",
+        EmailIntent.CONVERSATIONAL: f"I found {email_count} emails related to your question."
+    }
+    
+    # Get the appropriate intro based on intent, or use a default
+    intro = intent_prompts.get(intent, f"I found {email_count} emails related to your query. Here they are:")
+    
+    return intro
+
 async def process_email_query(query: str, conversation_id: str, context: Dict[str, Any] = None, email_filters: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Process an email-specific query with optional intent-based formatting"""
+    """Process an email-specific query with intent detection and relevant email retrieval"""
     try:
         # Record start time for performance tracking
         start_time = datetime.now()
@@ -123,40 +134,60 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             filter_options = {k: v for k, v in email_filters.items() if v is not None}
         elif context:
             filter_options.update(extract_time_filters(context))
-            
-        # Get answer
-        answer = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: qa_system.query(
-                question=query,
-                filters=filter_options,
-                k=5
-            )
-        )
         
-        # Get relevant emails
+        # Detect intent using existing intent detector
+        intent_detector = EmailIntentDetector(use_embeddings=False, use_llm=True)
+        intent_analysis = await intent_detector.detect_intent(query, context)
+        logger.info(f"Query: '{query}'")
+        logger.info(f"Detected intent: {intent_analysis.primary_intent.value} (confidence: {intent_analysis.metadata.confidence:.2f})")
+        if intent_analysis.secondary_intent:
+            logger.info(f"Secondary intent: {intent_analysis.secondary_intent.value}")
+        logger.info(f"Intent reasoning: {intent_analysis.metadata.reasoning}")
+        
+        # Retrieve relevant emails (regardless of intent)
         relevant_emails = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: qa_system.get_relevant_emails(
                 query=query,
                 filters=filter_options,
-                k=3
+                k=5  # Get top 5 relevant emails
             )
         )
         
-        # Format sources with more details
-        sources = [
-            {
+        # Generate a brief summary for each email using the LLM
+        summarized_emails = []
+        for email in relevant_emails:
+            # Limit email content length to avoid token limits
+            email_content = email.page_content[:1500] if len(email.page_content) > 1500 else email.page_content
+            
+            # Generate summary using existing LLM
+            try:
+                summary_prompt = f"Summarize this email in 1-2 concise sentences:\n\n{email_content}"
+                summary_response = qa_system.llm(summary_prompt)
+                summary = summary_response.content.strip() if hasattr(summary_response, 'content') else str(summary_response).strip()
+            except Exception as e:
+                logger.warning(f"Error generating email summary: {e}")
+                summary = "Summary unavailable."
+            
+            # Add to summarized emails list
+            summarized_emails.append({
                 "id": email.metadata.get("email_id", "unknown"),
-                "title": email.metadata.get("subject", "Email"),
                 "sender": email.metadata.get("sender", "Unknown"),
                 "recipient": email.metadata.get("recipient", "Unknown Recipient"),
+                "subject": email.metadata.get("subject", "Email"),
                 "date": email.metadata.get("date", ""),
                 "confidence": email.metadata.get("relevance_score", 0),
-                "excerpt": email.page_content[:200] + "..." if len(email.page_content) > 200 else email.page_content
-            }
-            for email in relevant_emails
-        ]
+                "content": email.page_content,
+                "summary": summary
+            })
+        
+        # Generate a brief overall answer based on intent and retrieved emails
+        overall_answer = await generate_intent_based_answer(
+            query=query,
+            intent=intent_analysis.primary_intent,
+            emails=summarized_emails,
+            llm=qa_system.llm
+        )
         
         # Calculate processing time
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -165,42 +196,22 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
         metadata = {
             "query_type": "email",
             "processing_time": processing_time,
-            "source_count": len(sources),
+            "source_count": len(summarized_emails),
             "conversation_context_used": bool(context and context.get("conversation_history")),
-            "filters_applied": filter_options
+            "filters_applied": filter_options,
+            "intent": {
+                "primary": intent_analysis.primary_intent.value,
+                "secondary": intent_analysis.secondary_intent.value if intent_analysis.secondary_intent else None,
+                "confidence": intent_analysis.metadata.confidence,
+                "reasoning": intent_analysis.metadata.reasoning
+            }
         }
         
-        # Apply intent-based formatting if enabled
-        if USE_INTENT_FORMATTING and EMAIL_OUTPUT_MANAGER is not None:
-            try:
-                logger.info(f"Applying intent-based formatting to email response for query: '{query}'")
-                formatted_response = await EMAIL_OUTPUT_MANAGER.process_response(
-                    query=query,
-                    raw_response=answer,
-                    sources=sources,
-                    context=context,
-                    metadata=metadata
-                )
-
-                if "metadata" in formatted_response and "intent" in formatted_response["metadata"]:
-                    intent_info = formatted_response["metadata"]["intent"]
-                    logger.info(f"Intent detection result: {intent_info['primary']} (confidence: {intent_info['confidence']:.2f})")
-                    logger.info(f"Formatting applied using style: {formatted_response['metadata'].get('formatting', {}).get('style', 'unknown')}")
-                
-                # Add formatting info to metadata
-                formatted_response["metadata"]["formatting_applied"] = True
-                
-                return formatted_response
-            except Exception as e:
-                logger.warning(f"Intent-based formatting failed: {str(e)}", exc_info=True)
-                logger.info("Falling back to standard response format")
-                # Continue with standard formatting if intent-based formatting fails
-        
-        # Return standard response if intent formatting is disabled or failed
+        # Return comprehensive response
         return {
             "status": "success",
-            "answer": answer,
-            "sources": sources,
+            "answer": overall_answer,
+            "emails": summarized_emails,
             "metadata": metadata
         }
         
@@ -224,27 +235,12 @@ def create_email_router():
                 detail="Query cannot be empty"
             )
         
-        # Check if intent formatting should be forced on or off for this request
-        force_intent_formatting = request.get("force_intent_formatting")
-        
-        # Store the original flag
-        original_flag = globals().get("USE_INTENT_FORMATTING")
-        
-        try:
-            # Override flag if specified in request
-            if force_intent_formatting is not None:
-                globals()["USE_INTENT_FORMATTING"] = force_intent_formatting
-                
-            return await process_email_query(
-                query=request.get("query"),
-                conversation_id=request.get("conversation_id"),
-                context=request.get("context"),
-                email_filters=request.get("email_filters")
-            )
-        finally:
-            # Restore original flag
-            if force_intent_formatting is not None:
-                globals()["USE_INTENT_FORMATTING"] = original_flag
+        return await process_email_query(
+            query=request.get("query"),
+            conversation_id=request.get("conversation_id"),
+            context=request.get("context"),
+            email_filters=request.get("email_filters")
+        )
     
     @router.get("/status")
     async def email_system_status():
@@ -254,8 +250,7 @@ def create_email_router():
             return {
                 "status": "healthy",
                 "initialized": qa_system is not None,
-                "intent_formatting_available": EMAIL_OUTPUT_MANAGER is not None,
-                "intent_formatting_enabled": USE_INTENT_FORMATTING,
+                "intent_detection_available": True,
                 "timestamp": datetime.utcnow().isoformat()
             }
         except Exception as e:
@@ -264,18 +259,6 @@ def create_email_router():
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat()
             }
-    
-    @router.post("/toggle_formatting")
-    async def toggle_intent_formatting(enabled: bool = True):
-        """Toggle intent-based formatting on or off"""
-        global USE_INTENT_FORMATTING
-        previous_value = USE_INTENT_FORMATTING
-        USE_INTENT_FORMATTING = enabled
-        return {
-            "status": "success",
-            "intent_formatting_enabled": USE_INTENT_FORMATTING,
-            "previous_value": previous_value
-        }
     
     return router
 
