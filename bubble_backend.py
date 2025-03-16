@@ -508,16 +508,28 @@ async def process_email_query(
                     "conversation_used": bool(conversation_context)
                 }))
 
+                # Replace your current logging with this more detailed version
         logger.info(f"Email query response structure: Keys = {list(response.keys())}")
-        logger.info(f"Answer content: {response.get('answer', 'No answer')[:100]}...")  # Log first 100 chars
+        logger.info(f"Answer content: {response.get('answer', 'No answer')[:100]}...")
         
-        # Log email information if present
+        # Log detailed information about all emails
         if "emails" in response and response["emails"]:
             logger.info(f"Number of emails returned: {len(response['emails'])}")
-            # Log details of first email
-            first_email = response["emails"][0]
-            logger.info(f"First email - Subject: {first_email.get('subject')}, Sender: {first_email.get('sender')}")
-            logger.info(f"First email summary: {first_email.get('summary', 'No summary')[:100]}...")
+            
+            # Log each email with key information
+            for i, email in enumerate(response["emails"]):
+                logger.info(f"Email {i+1}:")
+                logger.info(f"  ID: {email.get('id', 'No ID')}")
+                logger.info(f"  Subject: {email.get('subject', 'No subject')}")
+                logger.info(f"  Sender: {email.get('sender', 'No sender')}")
+                logger.info(f"  Date: {email.get('date', 'No date')}")
+                logger.info(f"  Confidence: {email.get('confidence', 'No confidence')}")
+                logger.info(f"  Summary: {email.get('summary', 'No summary')[:150]}...")
+                
+                # Optionally log a snippet of the content (first 100 chars)
+                if 'content' in email:
+                    content_snippet = email['content'][:100] + "..." if len(email['content']) > 100 else email['content']
+                    logger.info(f"  Content snippet: {content_snippet}")
         else:
             logger.info("No emails returned in the response")
         
