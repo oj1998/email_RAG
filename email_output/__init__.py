@@ -7,6 +7,7 @@ and formatting responses appropriately for each intent type.
 
 from .email_intent import EmailIntent, EmailIntentDetector, EmailIntentAnalysis
 from .email_formatter import FormatStyle, EmailFormatter, EmailResponse, EmailSource
+from .enhanced_email_formatter import EmailFormatStyle, EnhancedEmailFormatter, EmailCategoryFormat
 from .email_output_adapter import EmailOutputManager, enhanced_process_email_query
 
 __all__ = [
@@ -15,6 +16,11 @@ __all__ = [
     'EmailIntentAnalysis',
     'FormatStyle',
     'EmailFormatter',
+    'EmailFormatStyle',
+    'EnhancedEmailFormatter',
     'EmailResponse',
     'EmailSource',
-    'Email']
+    'EmailCategoryFormat',
+    'EmailOutputManager',
+    'enhanced_process_email_query'
+]
