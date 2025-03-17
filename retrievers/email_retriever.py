@@ -347,7 +347,7 @@ class EmailQASystem:
         k: Optional[int] = None
     ) -> List[Document]:
         """
-        Retrieve relevant emails without generating an answer
+        Retrieve relevant emails with relevance scores
         
         Args:
             query: Search query
@@ -355,7 +355,7 @@ class EmailQASystem:
             k: Optional override for number of documents to retrieve
             
         Returns:
-            List of relevant email documents
+            List of relevant email documents with relevance scores in metadata
         """
         # Temporarily update retriever settings
         original_k = self.retriever.k
@@ -365,9 +365,76 @@ class EmailQASystem:
             if k is not None:
                 self.retriever.k = k
             if filters:
-                self.retriever.filters = EmailFilterOptions(**filters)
+                try:
+                    self.retriever.filters = EmailFilterOptions(**filters)
+                except Exception as e:
+                    print(f"Warning: Invalid filter options: {e}")
+                    self.retriever.filters = None
+                    
+            # Get search parameters
+            search_kwargs = {}
+            if self.retriever.filters:
+                metadata_filter = self.retriever.filters.to_metadata_filter()
+                if metadata_filter:
+                    search_kwargs["filter"] = metadata_filter
+            
+            k_value = k if k is not None else self.retriever.k
+            
+            try:
+                # Attempt to use similarity_search_with_score
+                docs_with_scores = self.vector_store.similarity_search_with_score(
+                    query, 
+                    k=k_value, 
+                    **search_kwargs
+                )
                 
-            return self.retriever.get_relevant_documents(query)
+                # Add the score to each document's metadata
+                for doc, score in docs_with_scores:
+                    # Convert score to float and store in metadata
+                    try:
+                        # Handle different score formats (some might be cosine similarity, others distance)
+                        score_float = float(score)
+                        # Normalize if needed (some vector stores use distance metrics where lower is better)
+                        doc.metadata["relevance_score"] = score_float
+                    except (ValueError, TypeError):
+                        # If conversion fails, use a default score
+                        doc.metadata["relevance_score"] = 0.5
+                
+                documents = [doc for doc, _ in docs_with_scores]
+                
+            except (AttributeError, NotImplementedError) as e:
+                # Fallback to original method if vector store doesn't support similarity_search_with_score
+                print(f"Warning: similarity_search_with_score not supported, falling back: {e}")
+                documents = self.retriever.get_relevant_documents(query)
+                # Set a default relevance score so downstream code doesn't break
+                for i, doc in enumerate(documents):
+                    # Assign descending scores based on position
+                    doc.metadata["relevance_score"] = 1.0 - (i * (0.5 / max(1, len(documents))))
+            
+            # Apply reranking if enabled
+            if self.use_reranker and hasattr(self, 'llm') and self.llm and len(documents) > 1:
+                try:
+                    # Get original scores before reranking
+                    original_scores = {id(doc): doc.metadata.get("relevance_score", 0.5) for doc in documents}
+                    
+                    # Apply reranking
+                    reranker = CohereRerank()
+                    reranked_docs = reranker.compress_documents(documents, query)
+                    
+                    # Transfer original scores to reranked docs, adjusted for new position
+                    for i, doc in enumerate(reranked_docs):
+                        if id(doc) in original_scores:
+                            # Preserve original score but adjust slightly for new rank
+                            rank_adjustment = 1.0 - (i * 0.05)
+                            doc.metadata["relevance_score"] = original_scores[id(doc)] * rank_adjustment
+                    
+                    documents = reranked_docs
+                except Exception as e:
+                    print(f"Warning: Reranking failed: {e}")
+                    # Continue with documents as-is
+            
+            return documents
+            
         finally:
             # Restore original settings
             self.retriever.k = original_k
