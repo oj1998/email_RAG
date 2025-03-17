@@ -546,6 +546,23 @@ async def process_email_query(
             logger.info("========== EMAIL DETAILS END ==========")
         else:
             logger.info("No emails returned in the response")
+
+        if "targeted_answer" in response:
+            logger.info("========== TARGETED ANSWER DETAILS FROM ADAPTER ==========")
+            logger.info(f"Format: {response['targeted_answer'].get('formatting_rules', {}).get('format_style', 'not specified')}")
+            logger.info(f"Section Title: {response['targeted_answer'].get('formatting_rules', {}).get('section_title', 'none')}")
+            
+            # Log other important formatting rules
+            for rule_name, rule_value in response['targeted_answer'].get('formatting_rules', {}).items():
+                if rule_name not in ['format_style', 'section_title']:
+                    logger.info(f"Rule - {rule_name}: {rule_value}")
+            
+            # Log a preview of the content
+            content_preview = response['targeted_answer'].get('content', '')[:300]
+            if len(response['targeted_answer'].get('content', '')) > 300:
+                content_preview += "..."
+            logger.info(f"Content Preview: {content_preview}")
+            logger.info("=======================================================")
         
         # Log metadata
         if "metadata" in response:
