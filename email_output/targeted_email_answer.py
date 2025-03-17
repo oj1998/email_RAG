@@ -19,7 +19,7 @@ class TargetedEmailAnswerGenerator:
         query: str, 
         email_sources: List[Dict[str, Any]], 
         intent: EmailIntent
-    ) -> str:
+    ) -> Dict[str, Any]:
         """
         Generate a targeted answer based on specific email sources
         
@@ -29,7 +29,7 @@ class TargetedEmailAnswerGenerator:
             intent: The detected intent of the query
             
         Returns:
-            A focused answer addressing the query using the provided sources
+            Dict containing the answer and any formatting metadata
         """
         try:
             # Prepare source content to feed into the LLM
@@ -80,12 +80,95 @@ class TargetedEmailAnswerGenerator:
             })
             
             # Extract response text
+            answer_text = ""
             if hasattr(response, 'content'):
-                return response.content
+                answer_text = response.content
             elif isinstance(response, str):
-                return response
+                answer_text = response
             else:
-                return "Unable to generate a targeted answer from the sources."
+                answer_text = "Unable to generate a targeted answer from the sources."
+            
+            # Define formatting rules based on intent
+            formatting_rules = self._get_formatting_rules_for_intent(intent)
+            
+            return {
+                "content": answer_text,
+                "intent": intent.value,
+                "formatting_rules": formatting_rules
+            }
+            
         except Exception as e:
             logger.error(f"Error generating targeted answer: {e}")
-            return f"Unable to generate a targeted answer due to an error: {str(e)}"
+            return {
+                "content": f"Unable to generate a targeted answer due to an error: {str(e)}",
+                "intent": intent.value,
+                "formatting_rules": {"error": "true"}
+            }
+    
+    def _get_formatting_rules_for_intent(self, intent: EmailIntent) -> Dict[str, str]:
+        """Get formatting rules specific to an intent"""
+        
+        # Define default formatting rules
+        default_rules = {
+            "section_title": "Answer",
+            "highlight_key_points": "false",
+            "format_style": "narrative"
+        }
+        
+        # Intent-specific rules
+        intent_rules = {
+            EmailIntent.SEARCH: {
+                "section_title": "Search Results",
+                "highlight_matches": "true",
+                "format_style": "structured"
+            },
+            EmailIntent.SUMMARIZE: {
+                "section_title": "Summary",
+                "highlight_key_points": "true",
+                "format_style": "summary"
+            },
+            EmailIntent.EXTRACT: {
+                "section_title": "Extracted Information",
+                "highlight_extracted_items": "true",
+                "format_style": "structured"
+            },
+            EmailIntent.ANALYZE: {
+                "section_title": "Analysis",
+                "highlight_insights": "true",
+                "format_style": "structured",
+                "use_sections": "true"
+            },
+            EmailIntent.LIST: {
+                "section_title": "Email List",
+                "use_bullet_points": "true",
+                "format_style": "bullet"
+            },
+            EmailIntent.COUNT: {
+                "section_title": "Count Results",
+                "highlight_numbers": "true",
+                "format_style": "summary"
+            },
+            EmailIntent.FORWARD: {
+                "section_title": "Forward Recommendation",
+                "format_style": "structured",
+                "include_header_info": "true"
+            },
+            EmailIntent.ORGANIZE: {
+                "section_title": "Organization Suggestion",
+                "use_bullet_points": "true",
+                "format_style": "structured"
+            },
+            EmailIntent.CONVERSATIONAL: {
+                "section_title": "",  # No section title for conversational
+                "use_natural_language": "true",
+                "format_style": "conversational"
+            }
+        }
+        
+        # Get intent-specific rules or default to empty dict
+        specific_rules = intent_rules.get(intent, {})
+        
+        # Merge default rules with intent-specific rules
+        rules = {**default_rules, **specific_rules}
+        
+        return rules
