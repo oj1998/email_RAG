@@ -13,6 +13,7 @@ from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 
 # Import our intent detection system
 from email_output.email_intent import EmailIntentDetector, EmailIntent
+from email_output.targeted_email_answer import TargetedEmailAnswerGenerator
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -181,6 +182,14 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
                 "summary": summary
             })
         
+        # NEW: Generate a targeted answer based on the retrieved emails
+        answer_generator = TargetedEmailAnswerGenerator(llm=qa_system.llm)
+        targeted_answer = await answer_generator.generate_targeted_answer(
+            query=query,
+            email_sources=summarized_emails,
+            intent=intent_analysis.primary_intent
+        )
+        
         # Generate a brief overall answer based on intent and retrieved emails
         overall_answer = await generate_intent_based_answer(
             query=query,
@@ -207,10 +216,11 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             }
         }
         
-        # Return comprehensive response
+        # Return comprehensive response with both the original answer and targeted answer
         return {
             "status": "success",
             "answer": overall_answer,
+            "targeted_answer": targeted_answer,
             "emails": summarized_emails,
             "metadata": metadata
         }
