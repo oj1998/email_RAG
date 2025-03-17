@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any, List, Optional
+from typing import Dict, List, Optional, Any
 import logging
 import os
 import json
@@ -146,6 +146,7 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
         logger.info(f"Intent reasoning: {intent_analysis.metadata.reasoning}")
         
         # Retrieve relevant emails (regardless of intent)
+        retrieval_start_time = datetime.now()
         relevant_emails = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: qa_system.get_relevant_emails(
@@ -154,6 +155,8 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
                 k=5  # Get top 5 relevant emails
             )
         )
+        retrieval_time = (datetime.now() - retrieval_start_time).total_seconds()
+        logger.info(f"Email retrieval completed in {retrieval_time:.2f} seconds, found {len(relevant_emails)} emails")
         
         # Generate a brief summary for each email using the LLM
         summarized_emails = []
@@ -183,12 +186,32 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             })
         
         # NEW: Generate a targeted answer based on the retrieved emails
+        targeted_start_time = datetime.now()
         answer_generator = TargetedEmailAnswerGenerator(llm=qa_system.llm)
         targeted_answer = await answer_generator.generate_targeted_answer(
             query=query,
             email_sources=summarized_emails,
             intent=intent_analysis.primary_intent
         )
+        targeted_time = (datetime.now() - targeted_start_time).total_seconds()
+        
+        # Log the targeted answer details
+        logger.info("========== TARGETED ANSWER DETAILS ==========")
+        logger.info(f"Generation time: {targeted_time:.2f} seconds")
+        logger.info(f"Format: {targeted_answer.get('formatting_rules', {}).get('format_style', 'not specified')}")
+        logger.info(f"Section Title: {targeted_answer.get('formatting_rules', {}).get('section_title', 'none')}")
+        
+        # Log other important formatting rules
+        for rule_name, rule_value in targeted_answer.get('formatting_rules', {}).items():
+            if rule_name not in ['format_style', 'section_title']:
+                logger.info(f"Rule - {rule_name}: {rule_value}")
+        
+        # Log a preview of the content (first 300 chars)
+        content_preview = targeted_answer.get('content', '')[:300]
+        if len(targeted_answer.get('content', '')) > 300:
+            content_preview += "..."
+        logger.info(f"Content Preview: {content_preview}")
+        logger.info("===============================================")
         
         # Generate a brief overall answer based on intent and retrieved emails
         overall_answer = await generate_intent_based_answer(
@@ -213,10 +236,16 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
                 "secondary": intent_analysis.secondary_intent.value if intent_analysis.secondary_intent else None,
                 "confidence": intent_analysis.metadata.confidence,
                 "reasoning": intent_analysis.metadata.reasoning
+            },
+            "performance": {
+                "total_time": processing_time,
+                "retrieval_time": retrieval_time,
+                "targeted_answer_time": targeted_time
             }
         }
         
         # Return comprehensive response with both the original answer and targeted answer
+        logger.info(f"Email query processing completed in {processing_time:.2f} seconds")
         return {
             "status": "success",
             "answer": overall_answer,
