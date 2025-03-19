@@ -81,6 +81,33 @@ class TimelineBuilder:
             "date_range": date_range
         }
         
+        # Log detailed timeline data for debugging
+        logger.info("========== DETAILED TIMELINE DATA ==========")
+        logger.info(f"Query: '{query}'")
+        logger.info(f"Timeframe: {timeframe}")
+        logger.info(f"Date range: {date_range['start']} to {date_range['end']}")
+        
+        # Log events details
+        logger.info(f"Timeline events ({len(timeline_events)}):")
+        for i, event in enumerate(timeline_events):
+            logger.info(f"  Event {i+1}: {event['date']} - {event['subject']} from {event['sender']}")
+            contribution = event['contribution']
+            logger.info(f"    Contribution: {contribution[:100]}..." if len(contribution) > 100 else f"    Contribution: {contribution}")
+            logger.info(f"    Key points: {event['key_points']}")
+        
+        # Log turning points
+        logger.info(f"Turning points ({len(turning_points)}):")
+        for i, point in enumerate(turning_points):
+            event_idx = point.get('event_index')
+            event_info = f"{timeline_events[event_idx]['date']} - {timeline_events[event_idx]['subject']}" if 0 <= event_idx < len(timeline_events) else "Unknown"
+            logger.info(f"  Point {i+1}: {event_info}")
+            logger.info(f"    Description: {point.get('description', 'No description')}")
+        
+        # Log contributors
+        logger.info(f"Contributors ({len(contributors)}):")
+        for contributor in contributors:
+            logger.info(f"  {contributor['name']}: {contributor['email_count']} emails ({contributor['participation_percentage']:.1f}%)")
+        
         total_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"Timeline building completed in {total_time:.2f} seconds")
         logger.info(f"Timeline contains {len(timeline_events)} events, {len(turning_points)} turning points")
