@@ -15,6 +15,10 @@ from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 from email_output.email_intent import EmailIntentDetector, EmailIntent
 from email_output.targeted_email_answer import TargetedEmailAnswerGenerator
 
+# Import timeline components
+from email_output.timeline_builder import TimelineBuilder
+from email_output.timeline_formatter import TimelineFormatter, TimelineFormat
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -112,7 +116,8 @@ async def generate_intent_based_answer(query: str, intent: EmailIntent, emails: 
         EmailIntent.FORWARD: f"I found {email_count} emails that you might want to forward:",
         EmailIntent.ORGANIZE: f"I found {email_count} emails that could be organized:",
         EmailIntent.COMPOSE: f"Based on {email_count} related emails, here's some information to help compose your message:",
-        EmailIntent.CONVERSATIONAL: f"I found {email_count} emails related to your question."
+        EmailIntent.CONVERSATIONAL: f"I found {email_count} emails related to your question.",
+        EmailIntent.TIMELINE: f"I've created a timeline based on {email_count} related emails about this topic."
     }
     
     # Get the appropriate intro based on intent, or use a default
@@ -145,14 +150,21 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             logger.info(f"Secondary intent: {intent_analysis.secondary_intent.value}")
         logger.info(f"Intent reasoning: {intent_analysis.metadata.reasoning}")
         
-        # Retrieve relevant emails (regardless of intent)
+        # Check for timeline intent
+        is_timeline_query = (
+            intent_analysis.primary_intent == EmailIntent.TIMELINE or
+            (intent_analysis.secondary_intent and intent_analysis.secondary_intent == EmailIntent.TIMELINE) or
+            any(kw in query.lower() for kw in ["timeline", "history of", "evolution", "over time", "track changes", "decision history"])
+        )
+        
+        # Retrieve relevant emails
         retrieval_start_time = datetime.now()
         relevant_emails = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: qa_system.get_relevant_emails(
                 query=query,
                 filters=filter_options,
-                k=5  # Get top 5 relevant emails
+                k=8 if is_timeline_query else 5  # Get more emails for timeline
             )
         )
         retrieval_time = (datetime.now() - retrieval_start_time).total_seconds()
@@ -176,14 +188,117 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             # Add to summarized emails list
             summarized_emails.append({
                 "id": email.metadata.get("email_id", "unknown"),
+                "thread_id": email.metadata.get("thread_id", "unknown"),
                 "sender": email.metadata.get("sender", "Unknown"),
-                "recipient": email.metadata.get("recipient", "Unknown Recipient"),
+                "recipient": email.metadata.get("recipients", "Unknown Recipient"),
                 "subject": email.metadata.get("subject", "Email"),
                 "date": email.metadata.get("date", ""),
                 "confidence": email.metadata.get("relevance_score", 0),
                 "content": email.page_content,
                 "summary": summary
             })
+        
+        # Special processing for timeline queries
+        if is_timeline_query and len(summarized_emails) >= 2:
+            logger.info("Processing as timeline query")
+            
+            # Get the anchor email (most relevant)
+            anchor_email = summarized_emails[0]
+            
+            # Get additional thread emails if needed
+            thread_emails = []
+            if anchor_email.get('thread_id'):
+                thread_docs = qa_system.get_related_thread_emails(anchor_email)
+                
+                # Convert to summarized format
+                for doc in thread_docs:
+                    if hasattr(doc, 'page_content') and hasattr(doc, 'metadata'):
+                        # Generate summary using existing LLM
+                        try:
+                            summary_prompt = f"Summarize this email in 1-2 concise sentences:\n\n{doc.page_content[:1500]}"
+                            summary_response = qa_system.llm.invoke(summary_prompt)
+                            summary = summary_response.content.strip() if hasattr(summary_response, 'content') else str(summary_response).strip()
+                        except Exception as e:
+                            logger.warning(f"Error generating email summary: {e}")
+                            summary = f"Email from {doc.metadata.get('sender', 'unknown')} regarding {doc.metadata.get('subject', 'unknown topic')}."
+                        
+                        thread_email = {
+                            "id": doc.metadata.get("email_id", "unknown"),
+                            "thread_id": doc.metadata.get("thread_id", ""),
+                            "sender": doc.metadata.get("sender", "Unknown"),
+                            "recipient": doc.metadata.get("recipients", "Unknown Recipient"),
+                            "subject": doc.metadata.get("subject", "Email"),
+                            "date": doc.metadata.get("date", ""),
+                            "confidence": doc.metadata.get("relevance_score", 0),
+                            "content": doc.page_content,
+                            "summary": summary
+                        }
+                        thread_emails.append(thread_email)
+            
+            # Combine search results with thread emails, remove duplicates
+            all_emails = summarized_emails.copy()
+            seen_ids = {email.get('id') for email in all_emails}
+            
+            for email in thread_emails:
+                if email.get('id') not in seen_ids:
+                    all_emails.append(email)
+                    seen_ids.add(email.get('id'))
+            
+            # Build the timeline
+            timeline_builder = TimelineBuilder(llm=qa_system.llm)
+            timeline_data = await timeline_builder.build_timeline(
+                anchor_email=anchor_email,
+                related_emails=all_emails[1:],  # Skip the anchor which is already first
+                query=query,
+                timeframe=context.get("timeframe") if context else None
+            )
+            
+            # Format the timeline
+            timeline_formatter = TimelineFormatter()
+            formatted_timeline = timeline_formatter.format_timeline(
+                timeline_data=timeline_data,
+                format_style=TimelineFormat.CHRONOLOGICAL,
+                include_contributors=True,
+                highlight_turning_points=True
+            )
+            
+            # Store in database with enhanced metadata
+            pool = None  # Get pool from appropriate source
+            if pool:  # Only execute if pool is available
+                async with pool.acquire() as conn:
+                    await conn.execute("""
+                        INSERT INTO messages (role, content, conversation_id, metadata)
+                        VALUES ($1, $2, $3, $4)
+                    """, 'user', query, conversation_id,
+                        json.dumps({
+                            "context": context,
+                            "query_type": "email_timeline"
+                        }))
+
+                    await conn.execute("""
+                        INSERT INTO messages (role, content, conversation_id, metadata)
+                        VALUES ($1, $2, $3, $4)
+                    """, 'assistant', formatted_timeline, conversation_id,
+                        json.dumps({
+                            "emails": all_emails,
+                            "query_type": "email_timeline",
+                            "timeline_data": timeline_data,
+                            "conversation_used": bool(context and context.get("conversation_history"))
+                        }))
+            
+            # Return comprehensive response
+            return {
+                "status": "success",
+                "answer": formatted_timeline,
+                "emails": all_emails,
+                "timeline_data": timeline_data,
+                "metadata": {
+                    "query_type": "email_timeline",
+                    "processing_time": (datetime.now() - start_time).total_seconds(),
+                    "source_count": len(all_emails),
+                    "format": "timeline"
+                }
+            }
         
         # NEW: Generate a targeted answer based on the retrieved emails
         targeted_start_time = datetime.now()
@@ -317,8 +432,19 @@ def is_email_query(request_data: Dict[str, Any]) -> bool:
         logger.info("Routing to EMAIL: Email filters specified")
         return True
         
-    # Finally check for email keywords in the query
+    # Check for timeline keywords
     query = request_data.get("query", "").lower()
+    timeline_keywords = [
+        "timeline", "evolution", "history", "over time", 
+        "track changes", "development of", "decision history"
+    ]
+    
+    found_timeline_keywords = [keyword for keyword in timeline_keywords if keyword in query]
+    if found_timeline_keywords:
+        logger.info(f"Routing to EMAIL: Query contains timeline keywords {found_timeline_keywords}")
+        return True
+        
+    # Finally check for email keywords in the query
     email_keywords = [
         "email", "mail", "gmail", "inbox", "message",
         "received", "sent", "folder", "label"
