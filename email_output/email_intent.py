@@ -25,6 +25,7 @@ class EmailIntent(Enum):
     FORWARD = "forward"         # Forward or share emails
     ORGANIZE = "organize"       # Organize or categorize emails
     CONVERSATIONAL = "conversational"  # General chat about emails
+    TIMELINE = "timeline"
 
 class EmailIntentMetadata(BaseModel):
     """Metadata for email intent analysis"""
@@ -169,6 +170,15 @@ class EmailIntentDetector:
                     r"^(hi|hello|hey|thanks|thank you)",
                     r"^(got it|ok|okay|I understand|understood)"
                 ]
+            },
+            EmailIntent.TIMELINE: {
+                'high_weight': [
+                    r"timeline (of|for)",
+                    r"(evolution|history) of",
+                    r"how did .* (evolve|change|develop)",
+                    r"track .* over time",
+                    r"(decision|discussion) (history|progress)"
+                ]
             }
         }
 
@@ -244,6 +254,14 @@ class EmailIntentDetector:
                 "How should I handle overwhelming email volume?",
                 "What's a good strategy for email management?",
                 "Thanks for helping with my emails"
+            ],
+
+            EmailIntent.TIMELINE: [
+                "Show me the timeline of the budget discussions",
+                "How did the decision about the crane rental evolve?",
+                "Give me a history of communications about the site safety issue",
+                "Track the development of the material substitution discussion",
+                "Timeline of project delay discussions with the client"
             ]
         }
 
