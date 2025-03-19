@@ -9,6 +9,8 @@ from .email_intent import EmailIntent, EmailIntentDetector, EmailIntentAnalysis
 from .email_formatter import FormatStyle, EmailFormatter, EmailResponse, EmailSource
 from .enhanced_email_formatter import EmailFormatStyle, EnhancedEmailFormatter, EmailCategoryFormat
 from .email_output_adapter import EmailOutputManager, enhanced_process_email_query
+from .timeline_builder import TimelineBuilder
+from .timeline_formatter import TimelineFormatter, TimelineFormat
 
 __all__ = [
     'EmailIntent',
@@ -22,5 +24,8 @@ __all__ = [
     'EmailSource',
     'EmailCategoryFormat',
     'EmailOutputManager',
-    'enhanced_process_email_query'
+    'enhanced_process_email_query',
+    'TimelineBuilder',
+    'TimelineFormatter',
+    'TimelineFormat'
 ]
