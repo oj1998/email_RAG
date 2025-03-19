@@ -359,6 +359,16 @@ class EmailIntentDetector:
     def _score_with_patterns(self, query: str) -> Dict[EmailIntent, float]:
         """Score intents based on pattern matching"""
         scores = {intent: 0.0 for intent in EmailIntent}
+
+        timeline_matches = []
+        for pattern in self.intent_patterns[EmailIntent.TIMELINE].get('high_weight', []):
+            if re.search(pattern, query, re.IGNORECASE):
+                match = re.search(pattern, query, re.IGNORECASE).group(0)
+                timeline_matches.append(match)
+                scores[EmailIntent.TIMELINE] += 0.4
+        
+        if timeline_matches:
+            logger.info(f"Timeline intent detected through patterns: {timeline_matches}")
         
         for intent, patterns in self.intent_patterns.items():
             for pattern in patterns.get('high_weight', []):
