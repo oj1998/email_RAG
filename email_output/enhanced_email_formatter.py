@@ -20,6 +20,7 @@ class EmailFormatStyle(Enum):
     CONVERSATIONAL = "conversational"  # Natural conversation style
     CARD = "card"                 # Card-style format with clear sections
     ERROR = "error"               # Format for error messages
+    TIMELINE = "timeline"
 
 class EmailCategoryFormat(BaseModel):
     """Format specification for email responses"""
