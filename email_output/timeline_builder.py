@@ -14,6 +14,7 @@ class TimelineBuilder:
     def __init__(self, llm=None):
         """Initialize with optional language model"""
         self.llm = llm or ChatOpenAI(temperature=0.2)
+        logger.info("TimelineBuilder initialized")
     
     async def build_timeline(
         self,
@@ -34,37 +35,58 @@ class TimelineBuilder:
         Returns:
             Timeline data structure with events and metadata
         """
+        start_time = datetime.now()
+        logger.info(f"Building timeline for query: '{query}'")
+        logger.info(f"Using anchor email: '{anchor_email.get('subject', 'No subject')}' from {anchor_email.get('sender', 'Unknown')}")
+        logger.info(f"With {len(related_emails)} related emails")
+        
         # Combine all emails
         all_emails = [anchor_email] + related_emails
         
         # Sort by date
+        logger.info("Sorting emails by date")
         sorted_emails = sorted(
             all_emails,
             key=lambda x: self._parse_date(x.get('date', '')),
             reverse=False  # Ascending order (oldest first)
         )
+        logger.info(f"Sorted {len(sorted_emails)} emails chronologically")
         
         # Extract timeline events with context
+        logger.info("Extracting timeline events with context")
         timeline_events = await self._extract_timeline_events(sorted_emails, query)
         
         # Identify key contributors
+        logger.info("Identifying key contributors")
         contributors = self._identify_contributors(sorted_emails)
+        logger.info(f"Identified {len(contributors)} contributors")
         
         # Find turning points in the discussion
+        logger.info("Finding turning points in the discussion")
         turning_points = await self._identify_turning_points(timeline_events, query)
         
-        return {
+        # Build timeline data structure
+        date_range = {
+            "start": sorted_emails[0].get('date') if sorted_emails else None,
+            "end": sorted_emails[-1].get('date') if sorted_emails else None
+        }
+        
+        timeline_data = {
             "events": timeline_events,
             "contributors": contributors,
             "turning_points": turning_points,
             "query": query,
             "timeframe": timeframe,
             "email_count": len(sorted_emails),
-            "date_range": {
-                "start": sorted_emails[0].get('date') if sorted_emails else None,
-                "end": sorted_emails[-1].get('date') if sorted_emails else None
-            }
+            "date_range": date_range
         }
+        
+        total_time = (datetime.now() - start_time).total_seconds()
+        logger.info(f"Timeline building completed in {total_time:.2f} seconds")
+        logger.info(f"Timeline contains {len(timeline_events)} events, {len(turning_points)} turning points")
+        logger.info(f"Timeline date range: {date_range['start']} to {date_range['end']}")
+        
+        return timeline_data
     
     def _parse_date(self, date_str: str) -> datetime:
         """Parse date string to datetime object with fallback"""
@@ -79,7 +101,8 @@ class TimelineBuilder:
             # Last resort, try to parse with dateutil
             from dateutil import parser
             return parser.parse(date_str)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Date parsing failed for '{date_str}': {e}")
             # Return epoch start as fallback
             return datetime(1970, 1, 1)
     
@@ -150,7 +173,13 @@ class TimelineBuilder:
         sender: str
     ) -> Dict[str, Any]:
         """Use LLM to analyze the email's contribution to the timeline"""
+        logger.info(f"Analyzing contribution for email from {sender}")
+        
         try:
+            # Limit content for logging
+            log_content = content[:150] + "..." if len(content) > 150 else content
+            logger.info(f"Content to analyze: {log_content}")
+            
             prompt = PromptTemplate.from_template("""
             Analyze this email content in the context of the query: "{query}"
             
@@ -165,6 +194,7 @@ class TimelineBuilder:
             Format your response as JSON with these keys: contribution, key_points, references
             """)
             
+            logger.info("Sending to LLM for analysis")
             chain = prompt | self.llm
             
             response = await chain.ainvoke({
@@ -182,21 +212,36 @@ class TimelineBuilder:
             else:
                 response_text = str(response)
             
+            logger.info(f"Received LLM response of length {len(response_text)}")
+            logger.info(f"Response preview: {response_text[:150]}...")
+            
             # Try to extract JSON object
             json_match = re.search(r'({.*})', response_text, re.DOTALL)
             if json_match:
                 try:
-                    result = json.loads(json_match.group(1))
+                    matched_json = json_match.group(1)
+                    logger.info(f"Found JSON match: {matched_json[:150]}...")
+                    result = json.loads(matched_json)
+                    
                     # Ensure expected keys exist
-                    return {
+                    extraction_result = {
                         "contribution": result.get("contribution", ""),
                         "key_points": result.get("key_points", []),
                         "references": result.get("references", [])
                     }
-                except json.JSONDecodeError:
+                    
+                    logger.info(f"Successfully extracted structured data from LLM response")
+                    return extraction_result
+                    
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parsing error: {str(e)}")
+                    logger.error(f"Failed JSON string: {matched_json[:150]}...")
                     pass
+            else:
+                logger.warning("No JSON object found in LLM response")
             
             # Fallback: extract structured data without JSON parsing
+            logger.info("Using fallback extraction method")
             return {
                 "contribution": f"Content from {sender}",
                 "key_points": [],
@@ -204,7 +249,7 @@ class TimelineBuilder:
             }
                 
         except Exception as e:
-            logger.error(f"Error analyzing email contribution: {e}")
+            logger.error(f"Error analyzing email contribution: {str(e)}", exc_info=True)
             return {
                 "contribution": f"Content from {sender}",
                 "key_points": [],
@@ -213,6 +258,8 @@ class TimelineBuilder:
     
     def _identify_contributors(self, emails: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Identify key contributors in the email thread"""
+        logger.info(f"Identifying contributors from {len(emails)} emails")
+        
         # Count contributions by sender
         contribution_count = {}
         for email in emails:
@@ -221,6 +268,8 @@ class TimelineBuilder:
                 contribution_count[sender] += 1
             else:
                 contribution_count[sender] = 1
+        
+        logger.info(f"Found {len(contribution_count)} unique contributors")
         
         # Convert to list of contributors with metrics
         contributors = [
@@ -235,6 +284,11 @@ class TimelineBuilder:
         # Sort by contribution count (descending)
         contributors.sort(key=lambda x: x["email_count"], reverse=True)
         
+        # Log contributor details
+        for contributor in contributors:
+            logger.info(f"Contributor: {contributor['name']} - {contributor['email_count']} emails "
+                       f"({contributor['participation_percentage']:.1f}%)")
+        
         return contributors
     
     async def _identify_turning_points(
@@ -243,7 +297,12 @@ class TimelineBuilder:
         query: str
     ) -> List[Dict[str, Any]]:
         """Identify turning points or significant changes in the discussion"""
+        logger.info(f"Identifying turning points in {len(events)} events")
+        
+        start_time = datetime.now()
+        
         if not events or len(events) < 2:
+            logger.info("Not enough events to identify turning points")
             return []
             
         try:
@@ -257,6 +316,8 @@ class TimelineBuilder:
                 if event['key_points']:
                     events_text += "Key points: " + ", ".join(event['key_points']) + "\n"
                 events_text += "\n"
+            
+            logger.info(f"Prepared events text of length {len(events_text)} for turning point analysis")
             
             # Use LLM to identify turning points
             prompt = PromptTemplate.from_template("""
@@ -274,6 +335,7 @@ class TimelineBuilder:
             Format your response as JSON with an array of objects with these keys: event_index, description
             """)
             
+            logger.info("Sending to LLM for turning point identification")
             chain = prompt | self.llm
             
             response = await chain.ainvoke({
@@ -291,11 +353,16 @@ class TimelineBuilder:
             else:
                 response_text = str(response)
             
+            logger.info(f"Received turning point analysis from LLM, length: {len(response_text)}")
+            logger.info(f"Response preview: {response_text[:150]}...")
+            
             # Try to extract JSON object
             json_match = re.search(r'(\[{.*}\])', response_text, re.DOTALL)
             if json_match:
                 try:
-                    turning_points_raw = json.loads(json_match.group(1))
+                    matched_json = json_match.group(1)
+                    logger.info(f"Found JSON match: {matched_json[:150]}...")
+                    turning_points_raw = json.loads(matched_json)
                     
                     # Process turning points - convert event numbers to indices
                     turning_points = []
@@ -303,20 +370,32 @@ class TimelineBuilder:
                         if "event_index" in point:
                             event_index = int(point["event_index"]) - 1
                             if 0 <= event_index < len(events):
-                                turning_points.append({
+                                turning_point = {
                                     "event_index": event_index,
                                     "date": events[event_index]["date"],
                                     "sender": events[event_index]["sender"],
                                     "description": point.get("description", "Significant change in discussion")
-                                })
+                                }
+                                turning_points.append(turning_point)
+                                logger.info(f"Identified turning point at event {event_index+1}: {turning_point['description']}")
+                    
+                    logger.info(f"Successfully identified {len(turning_points)} turning points")
+                    
+                    # Log processing time
+                    processing_time = (datetime.now() - start_time).total_seconds()
+                    logger.info(f"Turning point identification completed in {processing_time:.2f} seconds")
                     
                     return turning_points
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parsing error: {str(e)}")
+                    logger.error(f"Failed JSON string: {matched_json[:150]}...")
+            else:
+                logger.warning("No JSON array found in LLM turning point response")
             
             # Fallback - return empty list
+            logger.info("No turning points identified")
             return []
                 
         except Exception as e:
-            logger.error(f"Error identifying turning points: {e}")
+            logger.error(f"Error identifying turning points: {str(e)}", exc_info=True)
             return []
