@@ -66,6 +66,21 @@ class TimelineFormatter:
             contributor_section = self._format_contributors(contributors)
             content += f"\n\n## CONTRIBUTORS\n\n{contributor_section}"
         
+        # Log the complete formatted timeline
+        logger.info("========== COMPLETE FORMATTED TIMELINE ==========")
+        logger.info(f"Format: {format_style.value}")
+        logger.info(f"Timeline for query: {query}")
+        logger.info(f"Events: {len(events)}, Contributors: {len(contributors)}, Turning points: {len(turning_points)}")
+        
+        # Log the full formatted timeline output (the complete text)
+        formatted_timeline = header + content
+        logger.info("---TIMELINE CONTENT START---")
+        # Split the timeline into chunks to avoid any log line length issues
+        for i in range(0, len(formatted_timeline), 1000):
+            chunk = formatted_timeline[i:i+1000]
+            logger.info(chunk)
+        logger.info("---TIMELINE CONTENT END---")
+        
         return header + content
     
     def _format_chronological(
