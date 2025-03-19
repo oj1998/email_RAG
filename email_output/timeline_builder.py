@@ -91,7 +91,15 @@ class TimelineBuilder:
         """Extract meaningful timeline events from emails"""
         events = []
         
-        for email in emails:
+        # Add start time tracking
+        start_time = datetime.now()
+        logger.info(f"Beginning timeline extraction for {len(emails)} emails related to: '{query}'")
+        
+        for i, email in enumerate(emails):
+            # Log each email being processed
+            logger.info(f"Processing email {i+1}/{len(emails)}: '{email.get('subject', 'No subject')}' " 
+                       f"from {email.get('sender', 'Unknown')} dated {email.get('date', 'Unknown date')}")
+            
             # Basic event data
             event = {
                 "date": email.get('date', 'Unknown date'),
@@ -105,11 +113,33 @@ class TimelineBuilder:
             
             # Use LLM to extract contribution and key points
             content = email.get('content', email.get('excerpt', ''))
+            content_preview = content[:100] + "..." if len(content) > 100 else content
+            logger.info(f"Email content preview: {content_preview}")
+            
             if content:
+                logger.info(f"Extracting contribution and key points using LLM")
+                extraction_start = datetime.now()
                 extraction = await self._analyze_email_contribution(content, query, event["sender"])
+                extraction_time = (datetime.now() - extraction_start).total_seconds()
+                
                 event.update(extraction)
                 
+                # Log the extraction results
+                contribution_preview = event['contribution'][:100] + "..." if len(event['contribution']) > 100 else event['contribution']
+                logger.info(f"Extraction complete in {extraction_time:.2f}s:")
+                logger.info(f"  Contribution: {contribution_preview}")
+                logger.info(f"  Key points: {event['key_points']}")
+                if event['references']:
+                    logger.info(f"  References: {event['references']}")
+            else:
+                logger.warning(f"Email {i+1} has no content to analyze")
+                
             events.append(event)
+        
+        # Log completion
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.info(f"Timeline event extraction completed in {processing_time:.2f} seconds")
+        logger.info(f"Extracted {len(events)} events total")
         
         return events
     
