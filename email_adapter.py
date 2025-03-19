@@ -262,6 +262,14 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
                 highlight_turning_points=True
             )
 
+            # Add enhanced timeline logging
+            logger.info("========== TIMELINE OUTPUT FROM EMAIL ADAPTER ==========")
+            logger.info(f"Query: '{query}'")
+            logger.info(f"Formatted timeline length: {len(formatted_timeline)} characters")
+            logger.info("First 1000 characters of formatted timeline:")
+            logger.info(formatted_timeline[:1000] + "..." if len(formatted_timeline) > 1000 else formatted_timeline)
+            logger.info("========== END TIMELINE OUTPUT ==========")
+
             logger.info("========== TIMELINE GENERATION DETAILS ==========")
             logger.info(f"Query: '{query}'")
             logger.info(f"Timeline built with {len(all_emails)} emails")
