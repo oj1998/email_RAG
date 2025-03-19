@@ -243,6 +243,67 @@ class EmailQASystem:
         
         # Build the QA chain
         self.qa_chain = self._build_qa_chain()
+
+    def get_related_thread_emails(
+        self,
+        anchor_email: Dict[str, Any],
+        max_results: int = 15
+    ) -> List[Document]:
+        """
+        Retrieve emails from the same thread as the anchor email
+        
+        Args:
+            anchor_email: The anchor email (dict with thread_id)
+            max_results: Maximum number of emails to retrieve
+            
+        Returns:
+            List of related email documents
+        """
+        if not anchor_email or not anchor_email.get('thread_id'):
+            return []
+            
+        thread_id = anchor_email.get('thread_id')
+        
+        # Search for emails with the same thread_id
+        search_kwargs = {
+            "filter": {"thread_id": thread_id}
+        }
+        
+        try:
+            # Get all emails in this thread
+            thread_emails = self.vector_store.similarity_search(
+                "",  # Empty query to get all matching the filter
+                k=max_results,
+                **search_kwargs
+            )
+            
+            # Sort by date (if available)
+            thread_emails.sort(
+                key=lambda doc: self._parse_date(doc.metadata.get('date', '')),
+                reverse=False  # Oldest first
+            )
+            
+            return thread_emails
+        except Exception as e:
+            print(f"Error retrieving thread emails: {e}")
+            return []
+    
+    def _parse_date(self, date_str):
+        """Parse date string to datetime object with fallback"""
+        try:
+            # Try common formats
+            for fmt in ('%Y-%m-%d', '%Y/%m/%d', '%d-%m-%Y', '%d/%m/%Y', '%b %d, %Y'):
+                try:
+                    return datetime.strptime(date_str, fmt)
+                except ValueError:
+                    continue
+                    
+            # Last resort, try to parse with dateutil
+            from dateutil import parser
+            return parser.parse(date_str)
+        except Exception:
+            # Return epoch start as fallback
+            return datetime(1970, 1, 1)
         
     def _build_qa_chain(self):
         """Build QA chain with retriever and LLM"""
