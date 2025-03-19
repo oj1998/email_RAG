@@ -567,6 +567,15 @@ async def process_email_query(
         # Log metadata
         if "metadata" in response:
             logger.info(f"Response metadata: {response['metadata']}")
+            if response.get("metadata", {}).get("query_type") == "email_timeline":
+                logger.info("========== COMPLETE TIMELINE FROM BUBBLE BACKEND ==========")
+                logger.info(f"Timeline answer length: {len(response['answer'])} characters")
+                # Log in chunks to handle large timelines
+                answer = response['answer']
+                for i in range(0, len(answer), 1000):
+                    chunk = answer[i:i+1000]
+                    logger.info(chunk)
+                logger.info("========== END COMPLETE TIMELINE ==========")
         
         return response
         
