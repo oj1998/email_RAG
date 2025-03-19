@@ -11,6 +11,7 @@ from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import CohereRerank
 from pydantic import BaseModel, Field
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableSerializable, RunnableLambda
+from datetime import datetime
 
 DEFAULT_EMAIL_PROMPT_TEMPLATE = """
 You are an email assistant. Given a question, use the following email context to provide a helpful response.
