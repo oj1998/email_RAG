@@ -261,6 +261,21 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
                 include_contributors=True,
                 highlight_turning_points=True
             )
+
+            logger.info("========== TIMELINE GENERATION DETAILS ==========")
+            logger.info(f"Query: '{query}'")
+            logger.info(f"Timeline built with {len(all_emails)} emails")
+            logger.info(f"Anchor email: {anchor_email.get('subject')} from {anchor_email.get('sender')}")
+            logger.info(f"Thread expansion: Found {len(thread_emails)} additional emails in thread")
+            logger.info(f"Date range: {timeline_data.get('date_range', {}).get('start')} to {timeline_data.get('date_range', {}).get('end')}")
+            logger.info(f"Contributors: {[c['name'] for c in timeline_data.get('contributors', [])]}")
+            logger.info(f"Turning points: {len(timeline_data.get('turning_points', []))}")
+            logger.info(f"Format style: {TimelineFormat.CHRONOLOGICAL.value}")
+            
+            # Log the actual formatted timeline content
+            logger.info("========== FORMATTED TIMELINE ==========")
+            logger.info(formatted_timeline[:1000] + "..." if len(formatted_timeline) > 1000 else formatted_timeline)
+            logger.info("========================================")
             
             # Store in database with enhanced metadata
             pool = None  # Get pool from appropriate source
