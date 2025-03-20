@@ -308,6 +308,10 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
                             "timeline_data": timeline_data,
                             "conversation_used": bool(context and context.get("conversation_history"))
                         }))
+
+            logger.info("========== FINAL TIMELINE UI OUTPUT ==========")
+            logger.info(formatted_timeline)  # This is what will be shown in the UI
+            logger.info("========== END FINAL TIMELINE UI OUTPUT ==========")
             
             # Return comprehensive response
             return {
