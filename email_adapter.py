@@ -32,6 +32,7 @@ EMAIL_QA_SYSTEM = None
 QueryRequest = Dict[str, Any]
 EmailFilter = Dict[str, Any]
 
+# Modify this function in email_adapter.py
 async def get_email_qa_system():
     """Initialize or return existing email QA system"""
     global EMAIL_QA_SYSTEM
@@ -48,12 +49,15 @@ async def get_email_qa_system():
                 temperature=0.2
             )
             
-            # Initialize vector store with direct SupabaseVectorStore implementation
+            # Initialize vector store with our EnhancedSupabaseVectorStore implementation
+            # Import the EnhancedSupabaseVectorStore
+            from enhanced_supabase import EnhancedSupabaseVectorStore
+            
             supabase_url = os.getenv("SUPABASE_URL")
             supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
             supabase_client = create_client(supabase_url, supabase_key)
             
-            vector_store = SupabaseVectorStore(
+            vector_store = EnhancedSupabaseVectorStore(
                 client=supabase_client,
                 embedding=embeddings_model,
                 table_name="email_embeddings",
@@ -68,7 +72,7 @@ async def get_email_qa_system():
                 k=5,
                 use_reranker=True
             )
-            logger.info("Email QA system initialized successfully")
+            logger.info("Email QA system initialized successfully with enhanced vector store")
         except Exception as e:
             logger.error(f"Failed to initialize email QA system: {e}")
             raise HTTPException(
