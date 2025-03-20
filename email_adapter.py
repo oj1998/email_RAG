@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.chat_models import ChatOpenAI
+from langchain_community.vectorstores import SupabaseVectorStore
+from supabase.client import create_client
 from loaders.vector_store_loader import VectorStoreFactory
 from retrievers.email_retriever import EmailQASystem, EmailFilterOptions
 
@@ -46,15 +48,16 @@ async def get_email_qa_system():
                 temperature=0.2
             )
             
-            # Initialize vector store
-            vector_store = VectorStoreFactory.create(
-                embeddings_model,
-                config={
-                    "type": "supabase",
-                    "supabase_url": os.getenv("SUPABASE_URL"),
-                    "supabase_key": os.getenv("SUPABASE_SERVICE_KEY"),
-                    "collection_name": "email_embeddings"
-                }
+            # Initialize vector store with direct SupabaseVectorStore implementation
+            supabase_url = os.getenv("SUPABASE_URL")
+            supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
+            supabase_client = create_client(supabase_url, supabase_key)
+            
+            vector_store = SupabaseVectorStore(
+                client=supabase_client,
+                embedding=embeddings_model,
+                table_name="email_embeddings",
+                query_name="match_email_embeddings"
             )
             
             # Create QA system
@@ -308,7 +311,7 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
                             "timeline_data": timeline_data,
                             "conversation_used": bool(context and context.get("conversation_history"))
                         }))
-
+            
             logger.info("========== FINAL TIMELINE UI OUTPUT ==========")
             logger.info(formatted_timeline)  # This is what will be shown in the UI
             logger.info("========== END FINAL TIMELINE UI OUTPUT ==========")
