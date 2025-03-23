@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional, Any
 from enum import Enum
 from pydantic import BaseModel
-from comparison_analyzer import ComparisonAnalysis, TopicAnalysis, ComparisonCriterion
+from comparisons.comparison_analyzer import ComparisonAnalysis, TopicAnalysis, ComparisonCriterion
 import logging
 
 logger = logging.getLogger(__name__)
@@ -200,3 +200,112 @@ class ComparisonFormatter:
             # Weaknesses
             if topic_analysis.weaknesses:
                 narrative += f"However, it has limitations regarding {', '.join(topic_analysis.weaknesses[:2])}. "
+            
+            # Suitability score
+            narrative += f"Overall suitability score: {topic_analysis.suitability_score:.1f}/1.0."
+            
+            topic_narratives.append(narrative)
+        
+        formatted += "\n\n".join(topic_narratives) + "\n\n"
+        
+        # Add criteria-based comparison
+        formatted += "## Criteria Comparison\n\n"
+        for criterion in analysis.criteria:
+            formatted += f"### {criterion.name}\n\n"
+            
+            criterion_comparison = []
+            for topic in analysis.topics:
+                topic_analysis = analysis.topic_analyses.get(topic)
+                if not topic_analysis:
+                    continue
+                    
+                # Find criterion in key_attributes
+                value = "N/A"
+                for attr_name, attr_value in topic_analysis.key_attributes.items():
+                    if criterion.name.lower() in attr_name.lower():
+                        value = str(attr_value)
+                        break
+                
+                criterion_comparison.append(f"**{topic}**: {value}")
+            
+            formatted += ". ".join(criterion_comparison) + "\n\n"
+        
+        # Add source references
+        formatted += "## Sources\n\n"
+        sources = set()
+        for topic_analysis in analysis.topic_analyses.values():
+            sources.update(topic_analysis.document_sources)
+        
+        formatted += f"This analysis is based on {len(sources)} document sources: {', '.join(sources)}."
+        
+        return formatted
+    
+    def _format_bullet(self, analysis: ComparisonAnalysis) -> str:
+        """Format comparison as bullet points"""
+        formatted = f"# {' vs '.join(analysis.topics)} Comparison\n\n"
+        
+        # Add overall recommendation
+        formatted += f"## Recommendation\n\n{analysis.overall_recommendation}\n\n"
+        
+        # Format comparison criteria
+        formatted += "## Comparison Criteria\n\n"
+        for criterion in analysis.criteria:
+            formatted += f"• **{criterion.name}**: {criterion.description}\n"
+        formatted += "\n"
+        
+        # Topic summaries
+        for topic in analysis.topics:
+            topic_analysis = analysis.topic_analyses.get(topic)
+            if not topic_analysis:
+                continue
+                
+            formatted += f"## {topic} (Score: {topic_analysis.suitability_score:.1f}/1.0)\n\n"
+            
+            # Strengths
+            formatted += "• **Strengths**:\n"
+            for strength in topic_analysis.strengths:
+                formatted += f"  - {strength}\n"
+            formatted += "\n"
+            
+            # Weaknesses
+            formatted += "• **Weaknesses**:\n"
+            for weakness in topic_analysis.weaknesses:
+                formatted += f"  - {weakness}\n"
+            formatted += "\n"
+            
+            # Key attributes
+            if topic_analysis.key_attributes:
+                formatted += "• **Key Attributes**:\n"
+                for attr, value in topic_analysis.key_attributes.items():
+                    formatted += f"  - {attr}: {value}\n"
+                formatted += "\n"
+        
+        # Direct comparison by criteria
+        formatted += "## Direct Comparison\n\n"
+        for criterion in analysis.criteria:
+            formatted += f"• **{criterion.name}**:\n"
+            for topic in analysis.topics:
+                topic_analysis = analysis.topic_analyses.get(topic)
+                if not topic_analysis:
+                    continue
+                    
+                # Find criterion in key_attributes
+                value = "N/A"
+                for attr_name, attr_value in topic_analysis.key_attributes.items():
+                    if criterion.name.lower() in attr_name.lower():
+                        value = str(attr_value)
+                        break
+                
+                formatted += f"  - {topic}: {value}\n"
+            formatted += "\n"
+        
+        # Sources
+        formatted += "## Sources\n\n"
+        sources = set()
+        for topic_analysis in analysis.topic_analyses.values():
+            sources.update(topic_analysis.document_sources)
+        
+        for source in sources:
+            formatted += f"• Document ID: {source}\n"
+        
+        return formatted
