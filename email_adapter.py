@@ -21,6 +21,8 @@ from email_output.targeted_email_answer import TargetedEmailAnswerGenerator
 from email_output.timeline_builder import TimelineBuilder
 from email_output.timeline_formatter import TimelineFormatter, TimelineFormat
 
+from enhanced_supabase import EnhancedSupabaseVectorStore
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
