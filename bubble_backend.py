@@ -41,6 +41,13 @@ from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from fastapi import APIRouter
 
+from comparisons import (
+    ComparisonRetriever,
+    ComparisonAnalyzer,
+    ComparisonFormatter,
+    ComparisonFormatStyle
+)
+
 query_router = APIRouter()
 
 logging.basicConfig(
@@ -602,6 +609,20 @@ async def process_document_query(
             current_context=request.context.dict()
         )
 
+        is_comparison = False
+        if hasattr(classification, 'suggested_format') and classification.suggested_format:
+            is_comparison = classification.suggested_format.get("is_comparison", False)
+        
+        # Route to comparison processing if needed
+        if is_comparison or classification.category == "COMPARISON":
+            logger.info(f"Routing to comparison query processing for query: {request.query}")
+            return await process_comparison_query(
+                request=request,
+                classification=classification,
+                conversation_context=conversation_context,
+                intent_analysis=intent_analysis
+            )
+
         # Perform intent analysis
         intent_analyzer = SmartQueryIntentAnalyzer()
         intent_analysis = await intent_analyzer.analyze(
@@ -940,6 +961,127 @@ async def initialize_components():
         "conversation_handler": conversation_handler,
         "classifier": classifier
     }
+
+async def process_comparison_query(
+    request: QueryRequest,
+    classification: QuestionType,
+    conversation_context: Optional[Dict] = None,
+    intent_analysis=None
+) -> Dict[str, Any]:
+    """Process a query asking for comparison between options"""
+    start_time = datetime.utcnow()
+    logger.info(f"Processing comparison query: {request.query}")
+    
+    try:
+        # Import comparison modules
+        from comparisons import (
+            ComparisonRetriever,
+            ComparisonAnalyzer,
+            ComparisonFormatter,
+            ComparisonFormatStyle
+        )
+        from langchain_openai import ChatOpenAI
+        
+        # Initialize comparison components
+        comparison_retriever = ComparisonRetriever(
+            vector_store=vector_store,
+            llm=ChatOpenAI(model_name="gpt-4"),
+            min_confidence=0.6
+        )
+        
+        comparison_analyzer = ComparisonAnalyzer(
+            llm=ChatOpenAI(model_name="gpt-4")
+        )
+        
+        comparison_formatter = ComparisonFormatter()
+        
+        # 1. Extract topics and retrieve documents
+        topics, topic_documents = await comparison_retriever.retrieve_for_comparison(
+            query=request.query,
+            metadata_filter=request.metadata_filter,
+            k_per_topic=3
+        )
+        
+        # Log the topics detected
+        logger.info(f"Comparison query detected. Topics: {', '.join(topics)}")
+        
+        # 2. Analyze the comparison
+        comparison_analysis = await comparison_analyzer.generate_comparison(
+            query=request.query,
+            topics=topics,
+            topic_documents=topic_documents,
+            domain_context="construction industry"
+        )
+        
+        # 3. Format the comparison
+        # Determine format style based on classification
+        format_style = ComparisonFormatStyle.STRUCTURED
+        if classification.suggested_format:
+            style = classification.suggested_format.get("style", "").lower()
+            if style == "step_by_step":
+                format_style = ComparisonFormatStyle.STRUCTURED
+            elif style == "narrative":
+                format_style = ComparisonFormatStyle.NARRATIVE
+            elif style == "tabular" or style == "table":
+                format_style = ComparisonFormatStyle.TABULAR
+        
+        formatted_comparison = comparison_formatter.format_comparison(
+            analysis=comparison_analysis,
+            format_style=format_style
+        )
+        
+        # Prepare sources for response
+        sources = []
+        for topic, analysis in comparison_analysis.topic_analyses.items():
+            for doc_id in analysis.document_sources:
+                # Find matching document in topic_documents
+                for topic_docs in topic_documents.values():
+                    for doc in topic_docs:
+                        if doc.metadata.get("document_id") == doc_id or doc.metadata.get("source_id") == doc_id:
+                            sources.append({
+                                "id": doc_id,
+                                "title": doc.metadata.get("title", "Unknown Document"),
+                                "page": doc.metadata.get("page"),
+                                "confidence": 0.8,  # Default confidence for comparison sources
+                                "excerpt": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
+                                "topic": topic  # Add topic to show which option this source belongs to
+                            })
+                            break
+        
+        # Calculate processing time
+        processing_time = (datetime.utcnow() - start_time).total_seconds()
+        
+        # Prepare response
+        response = {
+            "status": "success",
+            "answer": formatted_comparison,
+            "classification": classification.dict(),
+            "sources": sources,
+            "metadata": {
+                "category": classification.category,
+                "confidence": classification.confidence,
+                "is_comparison": True,
+                "compared_topics": topics,
+                "source_count": len(sources),
+                "processing_time": processing_time,
+                "conversation_context_used": bool(conversation_context)
+            }
+        }
+        
+        logger.info(f"Comparison query processing completed in {processing_time:.2f} seconds")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in comparison query processing: {str(e)}", exc_info=True)
+        
+        # Fallback to standard processing
+        logger.info("Falling back to standard query processing")
+        return await process_document_query(
+            request=request,
+            classification=classification,
+            conversation_context=conversation_context,
+            intent_analysis=intent_analysis
+        )
 
 # Keep the standalone app definition for direct usage
 app = FastAPI(lifespan=lifespan)
