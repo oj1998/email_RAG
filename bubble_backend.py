@@ -609,6 +609,15 @@ async def process_document_query(
             current_context=request.context.dict()
         )
 
+        
+
+        # Perform intent analysis
+        intent_analyzer = SmartQueryIntentAnalyzer()
+        intent_analysis = await intent_analyzer.analyze(
+            request.query, 
+            request.context.dict()
+        )
+
         is_comparison = False
         if hasattr(classification, 'suggested_format') and classification.suggested_format:
             is_comparison = classification.suggested_format.get("is_comparison", False)
@@ -622,13 +631,6 @@ async def process_document_query(
                 conversation_context=conversation_context,
                 intent_analysis=intent_analysis
             )
-
-        # Perform intent analysis
-        intent_analyzer = SmartQueryIntentAnalyzer()
-        intent_analysis = await intent_analyzer.analyze(
-            request.query, 
-            request.context.dict()
-        )
         
         # Initialize enhanced response generator
         enhanced_source_handler = EnhancedSmartResponseGenerator(
