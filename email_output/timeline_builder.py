@@ -71,6 +71,58 @@ class TimelineBuilder:
             "end": sorted_emails[-1].get('date') if sorted_emails else None
         }
         
+        # Generate a narrative summary of the timeline
+        logger.info("Generating narrative summary of the timeline")
+        
+        # Create a prompt for generating the summary
+        summary_prompt = PromptTemplate.from_template("""
+        Generate a concise summary of this email timeline in 2-3 paragraphs:
+        
+        Original query: {query}
+        Date range: {start_date} to {end_date}
+        Number of emails: {email_count}
+        Main contributors: {contributors}
+        Key turning points: {turning_points}
+        
+        Write a narrative summary that captures how this topic evolved over time,
+        highlighting the main developments and changes in the conversation.
+        Focus on providing context that helps the reader understand the timeline
+        at a glance.
+        """)
+        
+        # Prepare the input for the summary
+        turning_point_descriptions = [
+            tp.get("description", "Significant change") 
+            for tp in turning_points if "description" in tp
+        ]
+        
+        top_contributors = [
+            c["name"] for c in sorted(
+                contributors, 
+                key=lambda x: x["email_count"], 
+                reverse=True
+            )[:3]
+        ] if contributors else ["Unknown"]
+        
+        try:
+            summary_chain = summary_prompt | self.llm | StrOutputParser()
+            
+            summary = await summary_chain.ainvoke({
+                "query": query,
+                "start_date": date_range["start"] or "unknown",
+                "end_date": date_range["end"] or "unknown",
+                "email_count": len(sorted_emails),
+                "contributors": ", ".join(top_contributors),
+                "turning_points": "; ".join(turning_point_descriptions) or "No major turning points identified"
+            })
+            
+            logger.info(f"Generated summary of length {len(summary)}")
+            logger.info(f"Summary preview: {summary[:100]}...")
+        except Exception as e:
+            logger.error(f"Error generating summary: {str(e)}")
+            summary = f"This timeline shows the evolution of communications related to '{query}' over time, involving {len(sorted_emails)} emails from {len(contributors)} contributors."
+            logger.info(f"Using fallback summary: {summary}")
+        
         timeline_data = {
             "events": timeline_events,
             "contributors": contributors,
@@ -78,7 +130,8 @@ class TimelineBuilder:
             "query": query,
             "timeframe": timeframe,
             "email_count": len(sorted_emails),
-            "date_range": date_range
+            "date_range": date_range,
+            "summary": summary  # Add the generated summary to the timeline data
         }
         
         # Log detailed timeline data for debugging
@@ -86,6 +139,7 @@ class TimelineBuilder:
         logger.info(f"Query: '{query}'")
         logger.info(f"Timeframe: {timeframe}")
         logger.info(f"Date range: {date_range['start']} to {date_range['end']}")
+        logger.info(f"Summary: {summary}")
         
         # Log events details
         logger.info(f"Timeline events ({len(timeline_events)}):")
