@@ -4,6 +4,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 import json
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class ConstructionClassifier:
             - PLANNING: Questions about project sequence or timing
             - CALCULATIONS: Questions about measurements or quantities
             - ENVIRONMENTAL: Questions about weather or conditions
+            - COMPARISON: Questions comparing different options, materials, or methods
             
             Return JSON with:
             {
@@ -50,6 +52,15 @@ class ConstructionClassifier:
             Current Context: {current_context}""")
         ])
 
+    async def is_comparison_query(self, question: str) -> bool:
+        """Detect if a query is asking for a comparison between sources."""
+        comparison_patterns = [
+            r"compare", r"difference between", r"versus", r"vs\.", 
+            r"which is better", r"how does .+ differ", r"pros and cons",
+            r"advantages (?:and|&) disadvantages", r"(or|vs|versus)"
+        ]
+        return any(re.search(pattern, question.lower()) for pattern in comparison_patterns)
+
     async def classify_question(
         self, 
         question: str,
@@ -57,6 +68,9 @@ class ConstructionClassifier:
         current_context: Optional[Dict] = None
     ) -> QuestionType:
         try:
+            # Check if this is a comparison question first
+            is_comparison = await self.is_comparison_query(question)
+            
             # Convert ConversationContext to dict if needed
             if conversation_context and hasattr(conversation_context, 'dict'):
                 context_dict = conversation_context.dict()
@@ -76,6 +90,18 @@ class ConstructionClassifier:
             response = await self.llm.ainvoke(prompt)
             classification = json.loads(response.content)
             
+            # Add comparison flag to the classification if detected
+            if is_comparison:
+                if 'suggested_format' not in classification:
+                    classification['suggested_format'] = {}
+                classification['suggested_format']['is_comparison'] = True
+                
+                # If not already categorized as COMPARISON, consider overriding
+                if classification['category'] != 'COMPARISON' and classification['confidence'] < 0.8:
+                    classification['category'] = 'COMPARISON'
+                    if 'reasoning' in classification:
+                        classification['reasoning'] += " Detected comparison query patterns."
+            
             # Parse into QuestionType
             return QuestionType(**classification)
             
@@ -85,7 +111,8 @@ class ConstructionClassifier:
             return QuestionType(
                 category="GENERAL",
                 confidence=0.3,
-                reasoning="Classification error, using general handling"
+                reasoning="Classification error, using general handling",
+                suggested_format={"is_comparison": is_comparison if 'is_comparison' in locals() else False}
             )
 
     def _enhance_safety_confidence(self, classification: Dict) -> Dict:
