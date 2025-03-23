@@ -406,14 +406,18 @@ class TimelineBuilder:
             
             {events_text}
             
-            Identify up to 3 key turning points in this discussion - moments where the direction
+            Identify between 1-3 key turning points in this discussion - moments where the direction
             changed, decisions were made, or significant new information was introduced.
             
             For each turning point, provide:
-            1. The event number
-            2. A brief description of why it's significant
+            1. The event number (as an integer)
+            2. A brief description of why it's significant (2-3 sentences)
             
-            Format your response as JSON with an array of objects with these keys: event_index, description
+            FORMAT INSTRUCTIONS: Return your response as a JSON array with objects containing these keys: 
+            - "event_index" (integer, starting from 1)
+            - "description" (string)
+            
+            IMPORTANT: Make absolutely sure you identify at least one turning point, even if you need to stretch the definition a bit. The visualization requires at least one turning point to function properly.
             """)
             
             logger.info("Sending to LLM for turning point identification")
@@ -437,46 +441,109 @@ class TimelineBuilder:
             logger.info(f"Received turning point analysis from LLM, length: {len(response_text)}")
             logger.info(f"Response preview: {response_text[:150]}...")
             
-            # Try to extract JSON object
+            # Try to extract JSON array
             json_match = re.search(r'(\[{.*}\])', response_text, re.DOTALL)
+            turning_points_raw = []
+            
             if json_match:
                 try:
                     matched_json = json_match.group(1)
                     logger.info(f"Found JSON match: {matched_json[:150]}...")
                     turning_points_raw = json.loads(matched_json)
-                    
-                    # Process turning points - convert event numbers to indices
-                    turning_points = []
-                    for point in turning_points_raw:
-                        if "event_index" in point:
-                            event_index = int(point["event_index"]) - 1
-                            if 0 <= event_index < len(events):
-                                turning_point = {
-                                    "event_index": event_index,
-                                    "date": events[event_index]["date"],
-                                    "sender": events[event_index]["sender"],
-                                    "description": point.get("description", "Significant change in discussion")
-                                }
-                                turning_points.append(turning_point)
-                                logger.info(f"Identified turning point at event {event_index+1}: {turning_point['description']}")
-                    
-                    logger.info(f"Successfully identified {len(turning_points)} turning points")
-                    
-                    # Log processing time
-                    processing_time = (datetime.now() - start_time).total_seconds()
-                    logger.info(f"Turning point identification completed in {processing_time:.2f} seconds")
-                    
-                    return turning_points
+                    logger.info(f"Successfully parsed JSON with {len(turning_points_raw)} turning points")
                 except json.JSONDecodeError as e:
                     logger.error(f"JSON parsing error: {str(e)}")
-                    logger.error(f"Failed JSON string: {matched_json[:150]}...")
+                    logger.error(f"Failed JSON string: {json_match.group(1)[:150]}...")
+                    # We'll handle this in the fallback
             else:
                 logger.warning("No JSON array found in LLM turning point response")
             
-            # Fallback - return empty list
-            logger.info("No turning points identified")
-            return []
+            # Process turning points - convert event numbers to indices
+            turning_points = []
+            
+            # If we have turning points from LLM
+            if turning_points_raw:
+                for point in turning_points_raw:
+                    if "event_index" in point:
+                        # Parse event index (adjust from 1-indexed to 0-indexed)
+                        event_index = int(point["event_index"]) - 1
+                        
+                        if 0 <= event_index < len(events):
+                            turning_point = {
+                                "event_index": event_index,
+                                "date": events[event_index]["date"],
+                                "sender": events[event_index]["sender"],
+                                "description": point.get("description", "Significant change in discussion")
+                            }
+                            turning_points.append(turning_point)
+                            logger.info(f"Identified turning point at event {event_index+1}: {turning_point['description']}")
+            
+            # If we didn't get any turning points from the LLM, create a fallback turning point
+            if not turning_points and events:
+                # Use the most significant email (heuristically)
+                # Look for emails with longer contributions, keywords, etc.
+                
+                # Rank events by potential significance
+                ranked_events = []
+                for i, event in enumerate(events):
+                    score = 0
+                    # Longer contributions are potentially more significant
+                    score += len(event.get('contribution', '')) * 0.01
+                    # More key points suggest significance
+                    score += len(event.get('key_points', [])) * 5
+                    # Subject line keywords can indicate importance
+                    subject = event.get('subject', '').lower()
+                    importance_keywords = ['update', 'decision', 'important', 'change', 'new', 'final']
+                    for keyword in importance_keywords:
+                        if keyword in subject:
+                            score += 10
+                    
+                    ranked_events.append((i, score))
+                
+                # Sort by score, descending
+                ranked_events.sort(key=lambda x: x[1], reverse=True)
+                
+                # Use the highest-scoring event as a fallback turning point
+                if ranked_events:
+                    best_index, _ = ranked_events[0]
+                    
+                    # Create a fallback turning point
+                    fallback_turning_point = {
+                        "event_index": best_index,
+                        "date": events[best_index]["date"],
+                        "sender": events[best_index]["sender"],
+                        "description": f"This email from {events[best_index]['sender']} represents a key moment in the discussion about '{query}', introducing important information or changing the direction of the conversation."
+                    }
+                    
+                    turning_points.append(fallback_turning_point)
+                    logger.info(f"Created fallback turning point at event {best_index+1}: {events[best_index]['subject']}")
+                else:
+                    # If all else fails, use the first event
+                    fallback_turning_point = {
+                        "event_index": 0,
+                        "date": events[0]["date"],
+                        "sender": events[0]["sender"],
+                        "description": f"This email begins the discussion about '{query}', setting the context for the conversation that follows."
+                    }
+                    
+                    turning_points.append(fallback_turning_point)
+                    logger.info("Created fallback turning point with first event")
+            
+            # Log processing time
+            processing_time = (datetime.now() - start_time).total_seconds()
+            logger.info(f"Turning point identification completed in {processing_time:.2f} seconds")
+            logger.info(f"Final turning points count: {len(turning_points)}")
+            
+            return turning_points
                 
         except Exception as e:
             logger.error(f"Error identifying turning points: {str(e)}", exc_info=True)
+            # Return a fallback turning point if possible
+            if events:
+                return [{
+                    "event_index": 0,
+                    "date": events[0]["date"],
+                    "sender": events[0]["sender"],
+                    "description": f"This email begins the discussion about '{query}'."
+                }]
             return []
