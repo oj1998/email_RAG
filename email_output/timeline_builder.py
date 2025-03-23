@@ -401,23 +401,36 @@ class TimelineBuilder:
             logger.info(f"Prepared events text of length {len(events_text)} for turning point analysis")
             
             # Use LLM to identify turning points
+            # Use LLM to identify turning points with better content
             prompt = PromptTemplate.from_template("""
             Analyze this sequence of email events related to the query: "{query}"
             
             {events_text}
             
-            Identify between 1-3 key turning points in this discussion - moments where the direction
-            changed, decisions were made, or significant new information was introduced.
+            Identify 1-3 key turning points in this discussion - moments where:
+            - A significant decision was made
+            - New critical information was introduced
+            - The project direction changed
+            - A problem was identified or resolved
+            - A major milestone was reached
             
             For each turning point, provide:
             1. The event number (as an integer)
-            2. A brief description of why it's significant (2-3 sentences)
+            2. A VERY SPECIFIC description of why it's significant (3-4 sentences)
+            
+            Your description should contain SPECIFIC DETAILS about what made this email important:
+            - What specific decision was made?
+            - What specific information was introduced?
+            - How did it specifically change the project direction?
+            - What specific problem was identified or solved?
+            
+            Don't use generic language - include ACTUAL details from the email content.
             
             FORMAT INSTRUCTIONS: Return your response as a JSON array with objects containing these keys: 
             - "event_index" (integer, starting from 1)
-            - "description" (string)
+            - "description" (string with specific details)
             
-            IMPORTANT: Make absolutely sure you identify at least one turning point, even if you need to stretch the definition a bit. The visualization requires at least one turning point to function properly.
+            IMPORTANT: Make sure you identify at least one turning point with a DETAILED, SPECIFIC description.
             """)
             
             logger.info("Sending to LLM for turning point identification")
