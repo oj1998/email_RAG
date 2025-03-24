@@ -223,7 +223,7 @@ class DocumentVarianceAnalyzer:
                 # Return a basic variance in case of parsing error
                 return None, []
                 
-        def _extract_relevant_excerpt(self, text: str, keyword: str, max_length: int = 200) -> str:
+    def _extract_relevant_excerpt(self, text: str, keyword: str, max_length: int = 200) -> str:
             """Extract the most relevant excerpt from text based on a keyword"""
             lower_text = text.lower()
             lower_keyword = keyword.lower()
@@ -428,7 +428,7 @@ class DocumentVarianceAnalyzer:
             
             return normalized_scores
         
-        async def _generate_assessment_summary(
+    async def _generate_assessment_summary(
             self,
             topic: str,
             variances: List[DocumentVariance],
