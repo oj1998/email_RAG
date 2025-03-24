@@ -57,12 +57,12 @@ class VarianceDocumentRetriever:
         ])
         
     async def extract_topic(self, query: str) -> str:
-        """Extract the main topic from a variance analysis query"""
+        logger.info(f"Extracting topic from query: {query}")
         response = await self.llm.ainvoke(
             self.topic_extraction_prompt.format_messages(query=query)
         )
         topic = response.content.strip()
-        logger.info(f"Extracted topic for variance analysis: {topic}")
+        logger.info(f"Extracted topic: '{topic}' for query: '{query}'")
         return topic
     
     async def retrieve_documents_for_topic(
