@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 import logging
 import asyncio
 import re
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class TopicVarianceAnalysis(BaseModel):
     general_assessment: str  # Overall assessment of source agreement/disagreement
     source_count: int
     reliability_ranking: Dict[str, float]  # Source ID to reliability score
-    
+
 class DocumentVarianceAnalyzer:
     """Analyzes variances between documents on the same topic"""
     
@@ -40,6 +41,8 @@ class DocumentVarianceAnalyzer:
         self.llm = llm
         self.min_confidence = min_confidence
         self.embeddings_model = embeddings_model
+        
+        logger.info(f"Initialized DocumentVarianceAnalyzer with min_confidence={min_confidence}")
         
         # Initialize prompts for variance detection
         self.topic_extraction_prompt = ChatPromptTemplate.from_messages([
@@ -98,23 +101,33 @@ class DocumentVarianceAnalyzer:
             Source Information:
             {source_info}""")
         ])
-        
-    async def extract_main_topic(self, query: str) -> str:
+
+async def extract_main_topic(self, query: str) -> str:
         """Extract the main topic from the user's query"""
+        logger.info(f"Extracting main topic from query: '{query}'")
+        extraction_start = datetime.utcnow()
+        
         response = await self.llm.ainvoke(
             self.topic_extraction_prompt.format_messages(query=query)
         )
         topic = response.content.strip()
-        logger.info(f"Extracted topic: {topic}")
+        
+        extraction_time = (datetime.utcnow() - extraction_start).total_seconds()
+        logger.info(f"Extracted topic: '{topic}' in {extraction_time:.2f}s")
         return topic
         
     async def identify_key_aspects(self, topic: str, documents: List[Document]) -> List[str]:
         """Identify key aspects of the topic for variance analysis"""
+        logger.info(f"Identifying key aspects for topic: '{topic}' using {len(documents)} documents")
+        aspect_start = datetime.utcnow()
+        
         # Create a condensed version of documents for the prompt
         excerpts = "\n\n".join([
             f"Document {i+1} ({doc.metadata.get('title', 'Untitled')}): {doc.page_content[:300]}..."
-            for i, doc in enumerate(documents)
+            for i, doc in enumerate(documents[:5])  # Use first 5 docs to avoid token limits
         ])
+        
+        logger.info(f"Created excerpts from {min(5, len(documents))} documents for aspect identification")
         
         response = await self.llm.ainvoke(
             self.aspect_extraction_prompt.format_messages(
@@ -130,22 +143,26 @@ class DocumentVarianceAnalyzer:
             if aspect.strip()
         ]
         
-        logger.info(f"Identified {len(aspects)} key aspects for topic '{topic}': {aspects}")
+        aspect_time = (datetime.utcnow() - aspect_start).total_seconds()
+        logger.info(f"Identified {len(aspects)} key aspects for topic '{topic}' in {aspect_time:.2f}s: {aspects}")
         return aspects
-        
-    async def analyze_aspect_variance(
+
+async def analyze_aspect_variance(
         self, 
         topic: str,
         aspect: str, 
         documents: List[Document]
     ) -> Tuple[Optional[DocumentVariance], List[str]]:
         """Analyze variance for a specific aspect across documents"""
+        logger.info(f"Analyzing variance for aspect '{aspect}' of topic '{topic}'")
+        analysis_start = datetime.utcnow()
+        
         # Format documents for analysis
         formatted_docs = "\n\n".join([
             f"Document ID: {doc.metadata.get('document_id', f'doc_{i}')}\n"
             f"Title: {doc.metadata.get('title', 'Untitled')}\n"
             f"Page: {doc.metadata.get('page', 'N/A')}\n"
-            f"Content: {doc.page_content}"
+            f"Content: {doc.page_content[:500]}..."  # Truncate to avoid token limits
             for i, doc in enumerate(documents)
         ])
         
@@ -165,7 +182,9 @@ class DocumentVarianceAnalyzer:
             
             # If no variance exists, return agreement points only
             if not variance_data.get("variance_exists", False):
-                return None, variance_data.get("agreement_points", [])
+                agreement_points = variance_data.get("agreement_points", [])
+                logger.info(f"No variance detected for aspect '{aspect}'. Found {len(agreement_points)} agreement points.")
+                return None, agreement_points
                 
             # Create DocumentVariance object
             source_excerpts = {}
@@ -176,19 +195,31 @@ class DocumentVarianceAnalyzer:
                 if excerpt:
                     source_excerpts[doc_id] = excerpt
             
+            # Extract source positions and document IDs
+            source_positions = variance_data.get("source_positions", {})
+            confidence = variance_data.get("confidence", 0.7)
+            
+            logger.info(f"Detected variance for aspect '{aspect}' with confidence {confidence:.2f}")
+            logger.info(f"Source positions: {list(source_positions.keys())}")
+            
             variance = DocumentVariance(
                 topic=topic,
                 aspect=aspect,
                 variance_description=variance_data.get("variance_description", ""),
-                confidence=variance_data.get("confidence", 0.7),
-                source_positions=variance_data.get("source_positions", {}),
+                confidence=confidence,
+                source_positions=source_positions,
                 source_excerpts=source_excerpts
             )
+            
+            analysis_time = (datetime.utcnow() - analysis_start).total_seconds()
+            logger.info(f"Completed variance analysis for aspect '{aspect}' in {analysis_time:.2f}s")
             
             return variance, variance_data.get("agreement_points", [])
             
         except Exception as e:
-            logger.error(f"Error parsing variance analysis result: {e}")
+            logger.error(f"Error parsing variance analysis result for aspect '{aspect}': {e}", exc_info=True)
+            analysis_time = (datetime.utcnow() - analysis_start).total_seconds()
+            logger.warning(f"Variance analysis failed for aspect '{aspect}' after {analysis_time:.2f}s")
             # Return a basic variance in case of parsing error
             return None, []
             
@@ -220,44 +251,84 @@ class DocumentVarianceAnalyzer:
         
         # Fallback to first max_length characters if keyword not found
         return text[:max_length] + "..." if len(text) > max_length else text
-        
-    async def analyze_topic_variances(
+
+async def analyze_topic_variances(
         self, 
         query: str, 
         documents: List[Document]
     ) -> TopicVarianceAnalysis:
         """Complete analysis of variances for a topic across multiple documents"""
+        analysis_start = datetime.utcnow()
+        logger.info(f"Starting variance analysis for query: '{query}' with {len(documents)} documents")
+        
         if not documents or len(documents) < 2:
+            logger.error(f"Insufficient documents ({len(documents) if documents else 0}) for variance analysis")
             raise ValueError("At least two documents are required for variance analysis")
             
         # Extract the main topic
         topic = await self.extract_main_topic(query)
         
         # Identify key aspects for analysis
+        aspect_start = datetime.utcnow()
         aspects = await self.identify_key_aspects(topic, documents)
+        aspect_time = (datetime.utcnow() - aspect_start).total_seconds()
+        logger.info(f"Aspect identification completed in {aspect_time:.2f}s")
         
         # Analyze each aspect for variances
+        variance_start = datetime.utcnow()
         variances = []
         all_agreement_points = []
         
-        for aspect in aspects:
+        logger.info(f"Analyzing {len(aspects)} aspects for variances...")
+        
+        for i, aspect in enumerate(aspects):
+            logger.info(f"Analyzing aspect {i+1}/{len(aspects)}: '{aspect}'")
             variance, agreement_points = await self.analyze_aspect_variance(topic, aspect, documents)
+            
             if variance and variance.confidence >= self.min_confidence:
                 variances.append(variance)
-            all_agreement_points.extend(agreement_points)
+                logger.info(f"✓ Found variance for aspect '{aspect}' with confidence {variance.confidence:.2f}")
+            else:
+                logger.info(f"✗ No significant variance detected for aspect '{aspect}'")
+                
+            if agreement_points:
+                logger.info(f"Found {len(agreement_points)} agreement points for aspect '{aspect}'")
+                all_agreement_points.extend(agreement_points)
+        
+        variance_time = (datetime.utcnow() - variance_start).total_seconds()
+        logger.info(f"Analyzed {len(aspects)} aspects in {variance_time:.2f}s, found {len(variances)} variances")
         
         # Calculate source reliability based on metadata and variance analysis
+        reliability_start = datetime.utcnow()
+        logger.info("Calculating source reliability scores...")
         reliability_scores = self._calculate_reliability_scores(documents, variances)
         
+        # Log reliability results
+        if reliability_scores:
+            sorted_scores = sorted(reliability_scores.items(), key=lambda x: x[1], reverse=True)
+            logger.info(f"Reliability scores: {sorted_scores}")
+            if sorted_scores:
+                logger.info(f"Most reliable source: {sorted_scores[0][0]} ({sorted_scores[0][1]:.2f})")
+                if len(sorted_scores) > 1:
+                    logger.info(f"Least reliable source: {sorted_scores[-1][0]} ({sorted_scores[-1][1]:.2f})")
+        
+        reliability_time = (datetime.utcnow() - reliability_start).total_seconds()
+        logger.info(f"Reliability calculation completed in {reliability_time:.2f}s")
+        
         # Generate the overall assessment
+        summary_start = datetime.utcnow()
+        logger.info("Generating assessment summary...")
         general_assessment = await self._generate_assessment_summary(
             topic, 
             variances, 
             all_agreement_points, 
             documents
         )
+        summary_time = (datetime.utcnow() - summary_start).total_seconds()
+        logger.info(f"Summary generation completed in {summary_time:.2f}s")
         
-        return TopicVarianceAnalysis(
+        # Create the final analysis object
+        result = TopicVarianceAnalysis(
             topic=topic,
             key_variances=variances,
             agreement_points=all_agreement_points,
@@ -266,12 +337,19 @@ class DocumentVarianceAnalyzer:
             reliability_ranking=reliability_scores
         )
         
-    def _calculate_reliability_scores(
+        analysis_time = (datetime.utcnow() - analysis_start).total_seconds()
+        logger.info(f"Total variance analysis completed in {analysis_time:.2f}s")
+        logger.info(f"Results: {len(variances)} variances, {len(all_agreement_points)} agreement points across {len(documents)} sources")
+        
+        return result
+
+def _calculate_reliability_scores(
         self, 
         documents: List[Document], 
         variances: List[DocumentVariance]
     ) -> Dict[str, float]:
         """Calculate reliability scores for each source"""
+        logger.info(f"Calculating reliability scores for {len(documents)} documents")
         scores = {}
         
         # Initialize base scores using metadata
@@ -291,24 +369,32 @@ class DocumentVarianceAnalyzer:
                         # Simple heuristic - more recent documents score higher
                         if '2023' in creation_date or '2024' in creation_date:
                             score += 0.1
+                            logger.debug(f"Document {doc_id}: +0.1 for recent creation date ({creation_date})")
                         elif '2020' in creation_date or '2021' in creation_date or '2022' in creation_date:
                             score += 0.05
-                except:
-                    pass
+                            logger.debug(f"Document {doc_id}: +0.05 for moderately recent creation date ({creation_date})")
+                except Exception as e:
+                    logger.debug(f"Error processing creation date for document {doc_id}: {e}")
                 
             # Official documents score higher
             doc_type = doc.metadata.get('document_type', '').lower()
             if 'official' in doc_type or 'standard' in doc_type or 'code' in doc_type:
                 score += 0.1
+                logger.debug(f"Document {doc_id}: +0.1 for official document type ({doc_type})")
                 
             # Document with more comprehensive content scores higher (simple length heuristic)
             content_length = len(doc.page_content)
             if content_length > 5000:
                 score += 0.05
+                logger.debug(f"Document {doc_id}: +0.05 for comprehensive content ({content_length} chars)")
                 
             scores[doc_id] = min(1.0, score)  # Cap at 1.0
+            logger.debug(f"Document {doc_id}: Initial reliability score: {scores[doc_id]:.2f}")
             
         # Adjust scores based on variance analysis (if a source is frequently an outlier, reduce score)
+        if variances:
+            logger.info("Adjusting reliability scores based on variance analysis")
+            
         for variance in variances:
             source_positions = variance.source_positions
             if len(source_positions) > 1:
@@ -324,16 +410,23 @@ class DocumentVarianceAnalyzer:
                 # Find majority view
                 if position_counts:
                     majority_view = max(position_counts.items(), key=lambda x: x[1])[0]
+                    logger.debug(f"Aspect '{variance.aspect}': Majority view is '{majority_view}'")
                 
                 # Adjust scores for outliers
                 if majority_view:
                     for doc_id, positions in source_positions.items():
                         if doc_id in scores and not any(majority_view in pos for pos in positions):
                             # Penalize sources that disagree with majority view
+                            original_score = scores[doc_id]
                             scores[doc_id] -= 0.05
+                            logger.debug(f"Document {doc_id}: -0.05 for disagreeing with majority on '{variance.aspect}'")
+                            logger.debug(f"Document {doc_id}: Score adjusted from {original_score:.2f} to {scores[doc_id]:.2f}")
         
         # Normalize scores to keep them between 0 and 1
-        return {doc_id: max(0.1, min(1.0, score)) for doc_id, score in scores.items()}
+        normalized_scores = {doc_id: max(0.1, min(1.0, score)) for doc_id, score in scores.items()}
+        logger.info(f"Final reliability scores: {', '.join([f'{k}={v:.2f}' for k, v in normalized_scores.items()])}")
+        
+        return normalized_scores
     
     async def _generate_assessment_summary(
         self,
@@ -343,6 +436,9 @@ class DocumentVarianceAnalyzer:
         documents: List[Document]
     ) -> str:
         """Generate an overall assessment summary"""
+        logger.info(f"Generating assessment summary for topic '{topic}'")
+        summary_start = datetime.utcnow()
+        
         # Format variances for the prompt
         variance_text = "\n\n".join([
             f"Aspect: {v.aspect}\n"
@@ -368,6 +464,9 @@ class DocumentVarianceAnalyzer:
             for i, doc in enumerate(documents)
         ])
         
+        logger.info(f"Formatted input for summary generation: {len(variance_text)} chars of variance data, " +
+                    f"{len(agreement_text)} chars of agreement data, {len(source_info)} chars of source info")
+        
         # Generate summary
         response = await self.llm.ainvoke(
             self.summary_prompt.format_messages(
@@ -378,4 +477,10 @@ class DocumentVarianceAnalyzer:
             )
         )
         
-        return response.content.strip()
+        result = response.content.strip()
+        summary_time = (datetime.utcnow() - summary_start).total_seconds()
+        
+        logger.info(f"Generated assessment summary ({len(result)} chars) in {summary_time:.2f}s")
+        logger.debug(f"Summary preview: {result[:100]}...")
+        
+        return result
