@@ -65,16 +65,16 @@ class DocumentVarianceAnalyzer:
             of a topic. Identify specific variances, inconsistencies, or conflicts between sources.
             
             Respond with a JSON object containing:
-            {
+            {{
                 "variance_exists": true/false,
                 "variance_description": "detailed description of the variance",
                 "confidence": 0.0-1.0 (how confident you are this is a real variance, not just different wording),
-                "source_positions": {
+                "source_positions": {{
                     "doc_id1": ["position_description"],
                     "doc_id2": ["position_description"]
-                },
+                }},
                 "agreement_points": ["points where sources agree"]
-            }"""),
+            }}"""),
             ("user", """Topic: {topic}
             Aspect: {aspect}
             
