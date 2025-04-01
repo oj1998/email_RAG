@@ -46,6 +46,8 @@ from variance_analysis.variance_formatter import VarianceFormatter, VarianceForm
 from variance_analysis.variance_retriever import VarianceDocumentRetriever
 from variance_integration import is_variance_analysis_query, process_variance_query
 
+from knowledge_gaps import detect_knowledge_gap, create_knowledge_gap_router
+
 query_router = APIRouter()
 
 logging.basicConfig(
@@ -135,6 +137,7 @@ class ResponseMetadata(BaseModel):
     processing_time: float
     conversation_context_used: bool
     intent_analysis: Optional[Dict] = None
+    knowledge_gap: Optional[Dict] = None  
 
 
 class ProcessRequest(BaseModel):
@@ -207,6 +210,11 @@ async def lifespan(app: FastAPI):
         # Initialize classifier
         classifier = ConstructionClassifier()
         logger.info("Construction classifier initialized successfully")
+        
+        # Initialize knowledge gap detector
+        from knowledge_gaps.knowledge_gaps import get_detector
+        get_detector(pool)
+        logger.info("Knowledge gap detector initialized successfully")
         
     except Exception as e:
         logger.error(f"Startup error: {str(e)}")
@@ -682,6 +690,38 @@ async def process_document_query(
         else:
             documents = []
 
+        retrieved_content_confidence = 0.0
+        if documents:
+            # Average the semantic similarities if available
+            similarities = [doc.metadata.get('similarity', 0) for doc in documents if hasattr(doc, 'metadata') and 'similarity' in doc.metadata]
+            if similarities:
+                retrieved_content_confidence = sum(similarities) / len(similarities)
+            else:
+                # Fallback to moderate confidence if similarity scores aren't available
+                retrieved_content_confidence = 0.6 if len(documents) >= 3 else 0.4
+        
+        # Detect knowledge gaps
+        from knowledge_gaps.knowledge_gaps import detect_knowledge_gap
+        knowledge_gap = await detect_knowledge_gap(
+            query=request.query,
+            classification=classification,
+            source_documents=documents,
+            context=request.context.dict() if hasattr(request.context, 'dict') else {},
+            pool=pool
+        )
+        
+        # Include knowledge gap information in the response metadata
+        knowledge_gap_metadata = None
+        if knowledge_gap.is_gap:
+            knowledge_gap_metadata = {
+                "gap_detected": True,
+                "gap_type": knowledge_gap.gap_type,
+                "domain": knowledge_gap.domain,
+                "subcategory": knowledge_gap.subcategory,
+                "recommended_action": knowledge_gap.recommended_action
+            }
+            logger.info(f"Knowledge gap detected: {knowledge_gap.domain}/{knowledge_gap.subcategory} - {knowledge_gap.gap_type}")
+
         # Initialize QA chain with appropriate model
         if documents:
             # Create retriever with documents
@@ -818,6 +858,7 @@ async def process_document_query(
                 processing_time=processing_time,
                 conversation_context_used=bool(conversation_context),
                 intent_analysis=intent_analysis.dict(),
+                knowledge_gap=knowledge_gap_metadata,
                 format_used=getattr(category_format, 'style', FormatStyle.NARRATIVE).value 
                            if hasattr(category_format, 'style') else "unknown",
                 format_validation_errors=validation_errors if 'validation_errors' in locals() else []
@@ -966,6 +1007,8 @@ async def initialize_components():
 # Keep the standalone app definition for direct usage
 app = FastAPI(lifespan=lifespan)
 app.include_router(query_router)
+
+app.include_router(create_knowledge_gap_router(pool))
 
 # Export the router for use in other files
 __all__ = ['query_router', 'initialize_components', 'process_document_query', 'process_email_query']
