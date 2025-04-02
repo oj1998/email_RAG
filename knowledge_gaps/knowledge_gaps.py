@@ -255,6 +255,44 @@ class KnowledgeGapDetector:
                 )
                 
                 logger.info(f"Logged knowledge gap: {knowledge_gap.get('domain')}/{knowledge_gap.get('subcategory')} - {knowledge_gap.get('gap_type')}")
+
+            try:
+                import os
+                from supabase import create_client, Client
+                
+                supabase_url = os.getenv("SUPABASE_URL")
+                supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
+                
+                if not supabase_url or not supabase_key:
+                    logger.warning("Supabase credentials not available, skipping Supabase logging")
+                    return
+                
+                supabase: Client = create_client(supabase_url, supabase_key)
+                
+                # Prepare data for Supabase insert
+                data = {
+                    "query": query,
+                    "category": classification.get("category", "UNKNOWN"),
+                    "gap_type": knowledge_gap.get("gap_type", "unknown"),
+                    "domain": knowledge_gap.get("domain", "unspecified"),
+                    "subcategory": knowledge_gap.get("subcategory", "general"),
+                    "confidence": knowledge_gap.get("confidence", 0.0),
+                    "context": context if context else None,
+                    "classification": classification,
+                    "created_at": datetime.utcnow().isoformat()
+                }
+                
+                # Insert into Supabase
+                result = supabase.table("knowledge_gaps").insert(data).execute()
+                
+                # Check for errors
+                if hasattr(result, 'error') and result.error:
+                    logger.error(f"Error logging to Supabase: {result.error}")
+                else:
+                    logger.info(f"Successfully logged knowledge gap to Supabase: {knowledge_gap.get('domain')}/{knowledge_gap.get('subcategory')}")
+                    
+            except Exception as supabase_error:
+                logger.error(f"Error logging to Supabase: {supabase_error}")
                 
         except Exception as e:
             logger.error(f"Error logging knowledge gap: {e}")
