@@ -46,7 +46,7 @@ from variance_analysis.variance_formatter import VarianceFormatter, VarianceForm
 from variance_analysis.variance_retriever import VarianceDocumentRetriever
 from variance_integration import is_variance_analysis_query, process_variance_query
 
-from knowledge_gaps import detect_knowledge_gap, create_knowledge_gap_router
+from knowledge_gaps import detect_knowledge_gap, create_knowledge_gap_router, KnowledgeGap
 
 query_router = APIRouter()
 
@@ -596,6 +596,35 @@ async def process_email_query(
         logger.error(f"Error in email query processing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+# Add this function to bubble_backend.py
+async def generate_knowledge_gap_response(
+    query: str,
+    knowledge_gap: KnowledgeGap,
+    classification: QuestionType
+) -> str:
+    """Generate a specialized response for knowledge gap scenarios"""
+    # Use LLM to generate a helpful 'I don't know' response
+    llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.7)
+    
+    prompt = f"""
+    Create a response for a construction question that I don't have enough information to answer confidently.
+    
+    Query: {query}
+    Knowledge gap type: {knowledge_gap.gap_type}
+    Domain: {knowledge_gap.domain or 'general construction'}
+    
+    The response should:
+    1. Acknowledge the knowledge gap without using technical terms like 'knowledge gap'
+    2. Explain what information would be needed to answer properly
+    3. Suggest alternative approaches the user might take
+    4. Use a conversational, helpful tone
+    
+    Response:
+    """
+    
+    response = await llm.ainvoke(prompt)
+    return response.content
+
 
 async def process_document_query(
     request: QueryRequest,
@@ -721,6 +750,34 @@ async def process_document_query(
                 "recommended_action": knowledge_gap.recommended_action
             }
             logger.info(f"Knowledge gap detected: {knowledge_gap.domain}/{knowledge_gap.subcategory} - {knowledge_gap.gap_type}")
+
+        if knowledge_gap.is_gap:
+            # Generate a specialized "I don't know" response
+            start_gap_time = datetime.utcnow()
+            not_knowing_response = await generate_knowledge_gap_response(
+                query=request.query,
+                knowledge_gap=knowledge_gap,
+                classification=classification
+            )
+            processing_time = (datetime.utcnow() - start_gap_time).total_seconds()
+            
+            # Return early with the specialized response
+            return {
+                "status": "success",
+                "answer": not_knowing_response,
+                "classification": classification.dict(),
+                "sources": [],  # No sources since we don't know enough
+                "metadata": ResponseMetadata(
+                    category="KNOWLEDGE_GAP",  # Override the category 
+                    confidence=classification.confidence,
+                    source_count=0,
+                    processing_time=processing_time,
+                    conversation_context_used=bool(conversation_context),
+                    intent_analysis=intent_analysis.dict() if intent_analysis else None,
+                    knowledge_gap=knowledge_gap_metadata,
+                    format_used="knowledge_gap_format"  # Custom format identifier
+                ).dict()
+            }
 
         # Initialize QA chain with appropriate model
         if documents:
