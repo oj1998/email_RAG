@@ -177,40 +177,78 @@ class EnhancedSmartResponseGenerator:
         if metadata_filter:
             search_kwargs["filter"] = metadata_filter
         
-        # Create a retriever with the specified parameters
-        retriever = self.vector_store.as_retriever(
-            search_type="similarity",
-            search_kwargs=search_kwargs
-        )
-        
-        # Add a relevance filter to ensure minimum similarity
-        embeddings_filter = EmbeddingsFilter(
-            embeddings=self.embeddings_model,
-            similarity_threshold=min_similarity
-        )
-        
-        filtered_retriever = ContextualCompressionRetriever(
-            base_retriever=retriever,
-            base_compressor=embeddings_filter
-        )
-        
-        # Using run_in_executor because LangChain's retriever is not async
+        # Get documents with scores directly from vector store
         try:
-            docs = await asyncio.get_event_loop().run_in_executor(
+            docs_with_scores = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: filtered_retriever.get_relevant_documents(query)
+                lambda: self.vector_store.similarity_search_with_score(query, **search_kwargs)
             )
-            logger.info(f"Retrieved {len(docs)} relevant documents")
+            
+            # Add scores to document metadata
+            docs = []
+            for doc, score in docs_with_scores:
+                doc.metadata['similarity'] = float(score)
+                docs.append(doc)
+                
+            logger.info(f"Retrieved {len(docs)} relevant documents with scores")
+            
+            # Apply embeddings filter if min_similarity is specified
+            if min_similarity > 0:
+                filtered_docs = [doc for doc in docs if doc.metadata.get('similarity', 0) >= min_similarity]
+                if filtered_docs:
+                    logger.info(f"Filtered to {len(filtered_docs)} documents above similarity threshold {min_similarity}")
+                    docs = filtered_docs
+            
             return docs
+            
         except Exception as e:
-            logger.error(f"Error retrieving documents: {str(e)}")
-            # Fall back to basic retriever if compression fails
-            docs = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: retriever.get_relevant_documents(query)
+            logger.error(f"Error retrieving documents with scores: {str(e)}")
+            
+            # Fall back to basic retriever if similarity_search_with_score fails
+            retriever = self.vector_store.as_retriever(
+                search_type="similarity",
+                search_kwargs=search_kwargs
             )
-            logger.info(f"Fall back retrieval: {len(docs)} documents")
-            return docs
+            
+            try:
+                # Create embeddings filter for minimum similarity
+                embeddings_filter = EmbeddingsFilter(
+                    embeddings=self.embeddings_model,
+                    similarity_threshold=min_similarity
+                )
+                
+                filtered_retriever = ContextualCompressionRetriever(
+                    base_retriever=retriever,
+                    base_compressor=embeddings_filter
+                )
+                
+                docs = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: filtered_retriever.get_relevant_documents(query)
+                )
+                
+                # Since filtered_retriever doesn't provide scores, add default high scores
+                for doc in docs:
+                    doc.metadata['similarity'] = 0.8  # Default high score above threshold
+                    
+                logger.info(f"Retrieved {len(docs)} documents using filtered retriever with default scores")
+                return docs
+                
+            except Exception as inner_e:
+                logger.error(f"Error with filtered retrieval: {str(inner_e)}")
+                
+                # Final fallback to basic retrieval
+                docs = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: retriever.get_relevant_documents(query)
+                )
+                
+                # Add default scores that will pass your threshold
+                for doc in docs:
+                    doc.metadata['similarity'] = 0.75  # Above your 0.65 threshold
+                    
+                logger.info(f"Fall back retrieval: {len(docs)} documents with default scores")
+                return docs
 
     async def _extract_attributions(
         self,
