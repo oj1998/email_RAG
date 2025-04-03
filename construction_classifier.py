@@ -60,6 +60,16 @@ class ConstructionClassifier:
             r"advantages (?:and|&) disadvantages", r"(or|vs|versus)"
         ]
         return any(re.search(pattern, question.lower()) for pattern in comparison_patterns)
+        
+    def is_emergency_query(self, question: str) -> bool:
+        """Detect if a query is related to an emergency situation."""
+        emergency_patterns = [
+            r"emergency", r"urgent", r"immediately", r"right now",
+            r"gas leak", r"fire", r"explosion", r"collapse", r"accident",
+            r"injury", r"injured", r"hurt", r"bleeding", r"danger",
+            r"hazard", r"evacuate", r"evacuation"
+        ]
+        return any(re.search(pattern, question.lower()) for pattern in emergency_patterns)
 
     async def classify_question(
         self, 
@@ -67,6 +77,21 @@ class ConstructionClassifier:
         conversation_context: Optional[Dict] = None,
         current_context: Optional[Dict] = None
     ) -> QuestionType:
+        # Fast-track for emergency queries to ensure they always get proper classification
+        if self.is_emergency_query(question):
+            logger.info(f"Emergency query detected: '{question}'")
+            return QuestionType(
+                category="SAFETY",
+                confidence=0.95,
+                reasoning="Emergency-related query detected",
+                suggested_format={
+                    "style": "step_by_step",
+                    "includes": ["immediate actions", "safety precautions", "follow-up steps"],
+                    "urgency": 5,
+                    "is_comparison": False
+                }
+            )
+            
         try:
             # Check if this is a comparison question first
             is_comparison = await self.is_comparison_query(question)
@@ -88,7 +113,35 @@ class ConstructionClassifier:
             
             # Get classification from LLM
             response = await self.llm.ainvoke(prompt)
-            classification = json.loads(response.content)
+            
+            # Improved JSON parsing with error handling
+            try:
+                # Clean and parse the JSON response
+                content = response.content.strip()
+                # Handle potential markdown code blocks
+                if "```json" in content:
+                    content = re.search(r'```json\n(.*?)\n```', content, re.DOTALL).group(1)
+                elif "```" in content:
+                    content = re.search(r'```\n(.*?)\n```', content, re.DOTALL).group(1)
+                
+                classification = json.loads(content)
+                
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                logger.error(f"JSON parsing error: {str(json_err)}")
+                logger.debug(f"Raw response content: {response.content}")
+                
+                # Provide a reasonable fallback classification
+                return QuestionType(
+                    category="GENERAL",
+                    confidence=0.5,
+                    reasoning="Classification parsing error, using general handling",
+                    suggested_format={
+                        "style": "narrative",
+                        "includes": ["key information"],
+                        "urgency": 3,
+                        "is_comparison": is_comparison
+                    }
+                )
             
             # Add comparison flag to the classification if detected
             if is_comparison:
@@ -102,12 +155,35 @@ class ConstructionClassifier:
                     if 'reasoning' in classification:
                         classification['reasoning'] += " Detected comparison query patterns."
             
-            # Parse into QuestionType
-            return QuestionType(**classification)
+            # Validate the classification format
+            if not all(key in classification for key in ["category", "confidence", "reasoning"]):
+                logger.warning(f"Incomplete classification returned: {classification}")
+                # Fill in missing fields
+                classification["category"] = classification.get("category", "GENERAL")
+                classification["confidence"] = classification.get("confidence", 0.6)
+                classification["reasoning"] = classification.get("reasoning", "Partial classification")
+            
+            # Parse into QuestionType and apply enhancements
+            result = QuestionType(**classification)
+            return self._enhance_safety_confidence(result)
             
         except Exception as e:
-            logger.error(f"Classification error: {e}")
-            # Fallback to general category
+            logger.error(f"Classification error: {str(e)}")
+            # Enhanced fallback classification with context awareness
+            if self.is_emergency_query(question):
+                return QuestionType(
+                    category="SAFETY",
+                    confidence=0.9,
+                    reasoning="Emergency detected during error recovery",
+                    suggested_format={
+                        "style": "step_by_step", 
+                        "includes": ["immediate actions", "safety precautions"],
+                        "urgency": 5,
+                        "is_comparison": False
+                    }
+                )
+            
+            # Regular fallback for non-emergency queries
             return QuestionType(
                 category="GENERAL",
                 confidence=0.3,
@@ -115,12 +191,11 @@ class ConstructionClassifier:
                 suggested_format={"is_comparison": is_comparison if 'is_comparison' in locals() else False}
             )
 
-    def _enhance_safety_confidence(self, classification: Dict) -> Dict:
+    def _enhance_safety_confidence(self, classification: QuestionType) -> QuestionType:
         """Boost confidence for safety-related queries"""
-        if classification['category'] == 'SAFETY':
-            classification['confidence'] = min(1.0, classification['confidence'] + 0.1)
-            classification['suggested_format']['urgency'] = max(
-                classification['suggested_format'].get('urgency', 1), 
-                4
-            )
+        if classification.category == 'SAFETY':
+            classification.confidence = min(1.0, classification.confidence + 0.1)
+            if classification.suggested_format:
+                current_urgency = classification.suggested_format.get('urgency', 1)
+                classification.suggested_format['urgency'] = max(current_urgency, 4)
         return classification
