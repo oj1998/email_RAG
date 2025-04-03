@@ -104,12 +104,12 @@ class EnhancedSmartResponseGenerator:
             ("user", "Question: {query}\nCategory: {category}\nContext Documents: {context}")
         ])
 
-async def should_use_sources(
-        self,
-        query: str,
-        classification: QuestionType,
-        intent_analysis=None
-    ) -> bool:
+    async def should_use_sources(
+            self,
+            query: str,
+            classification: QuestionType,
+            intent_analysis=None
+        ) -> bool:
         """Determine if the query requires source retrieval
         
         Args:
@@ -229,7 +229,7 @@ async def should_use_sources(
             # Return empty list on failure rather than crashing
             return []
 
-async def _batch_embed_documents(self, texts, batch_size=100):
+    async def _batch_embed_documents(self, texts, batch_size=100):
         """Batch process document embeddings with optimal batch size
         
         Args:
@@ -381,7 +381,7 @@ async def _batch_embed_documents(self, texts, batch_size=100):
                     )
             return fallback_attributions
 
-def _calculate_content_overlap(self, text1: str, text2: str) -> float:
+    def _calculate_content_overlap(self, text1: str, text2: str) -> float:
         """Calculate content overlap using improved word-based similarity
         
         Args:
