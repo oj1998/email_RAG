@@ -379,12 +379,6 @@ class NLPTransformer:
             )]
         )
         
-        response = await self.llm.agenerate([prompt.format(
-            content=content,
-            category=category,
-            intent=intent_analysis.primary_intent.value
-        )])
-        
         # Check if response is a list or has generations attribute
         if hasattr(response, 'generations') and response.generations:
             # Handle LangChain >= 0.0.267 response format
