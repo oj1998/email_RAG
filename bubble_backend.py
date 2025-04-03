@@ -738,7 +738,7 @@ async def process_document_query(
                     query=request.query,
                     classification=classification,
                     metadata_filter=metadata_filter,
-                    k=8 if classification.category == "SAFETY" else 5
+                    k=2 if classification.category == "SAFETY" else 2
                 )
             else:
                 documents = []
