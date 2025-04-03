@@ -1086,11 +1086,27 @@ async def initialize_components():
         statement_cache_size=0
     )
     
-    # Initialize vector store
+    # Create rate-limited embeddings
+    class RateLimitedEmbeddings(OpenAIEmbeddings):
+        async def aembed_documents(self, texts):
+            return await rate_limited_call(
+                super().aembed_documents,
+                embeddings_limiter,
+                texts
+            )
+        
+        async def aembed_query(self, text):
+            return await rate_limited_call(
+                super().aembed_query,
+                embeddings_limiter,
+                text
+            )
+    
+    # Initialize vector store with rate-limited embeddings
     vector_store = PGVector(
         collection_name="document_embeddings",
         connection_string=CONNECTION_STRING,
-        embedding_function=OpenAIEmbeddings()
+        embedding_function=RateLimitedEmbeddings()
     )
     
     # Initialize conversation handler
