@@ -175,7 +175,7 @@ class SmartResponseGenerator:
     ) -> List[Document]:
         """Get relevant documents with classification-specific settings"""
         search_kwargs = {
-            "k": 8 if classification.category == "SAFETY" else 5,
+            "k": 2 if classification.category == "SAFETY" else 2,
             "score_threshold": 0.7 if classification.category == "SAFETY" else 0.5
         }
         
