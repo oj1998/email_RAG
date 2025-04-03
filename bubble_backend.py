@@ -50,6 +50,8 @@ from knowledge_gaps import detect_knowledge_gap, create_knowledge_gap_router, Kn
 
 from rate_limiter import gpt4_limiter, gpt35_limiter, embeddings_limiter, rate_limited_call
 
+concurrent_query_semaphore = asyncio.Semaphore(10)  # or whatever limit is appropriate
+
 query_router = APIRouter()
 
 logging.basicConfig(
