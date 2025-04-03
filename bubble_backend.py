@@ -754,14 +754,28 @@ async def process_document_query(
                     retrieved_content_confidence = 0.6 if len(documents) >= 3 else 0.4
             
             # Detect knowledge gaps
-            from knowledge_gaps.knowledge_gaps import detect_knowledge_gap
-            knowledge_gap = await detect_knowledge_gap(
-                query=request.query,
-                classification=classification,
-                source_documents=documents,
-                context=request.context.dict() if hasattr(request.context, 'dict') else {},
-                pool=pool
-            )
+            KNOWLEDGE_GAP_THRESHOLD = 0.65  # Match the threshold from logs
+            if documents and retrieved_content_confidence >= KNOWLEDGE_GAP_THRESHOLD:
+                # Create a simple "no gap" object without running the detection logic
+                from knowledge_gaps import KnowledgeGap
+                knowledge_gap = KnowledgeGap(
+                    is_gap=False,
+                    gap_type=None,
+                    domain=None,
+                    subcategory=None,
+                    recommended_action=None
+                )
+                logger.info(f"Skipped knowledge gap detection - document confidence {retrieved_content_confidence} exceeds threshold {KNOWLEDGE_GAP_THRESHOLD}")
+            else:
+                # Only run knowledge gap detection if confidence is below threshold
+                from knowledge_gaps.knowledge_gaps import detect_knowledge_gap
+                knowledge_gap = await detect_knowledge_gap(
+                    query=request.query,
+                    classification=classification,
+                    source_documents=documents,
+                    context=request.context.dict() if hasattr(request.context, 'dict') else {},
+                    pool=pool
+                )
             
             # Include knowledge gap information in the response metadata
             knowledge_gap_metadata = None
