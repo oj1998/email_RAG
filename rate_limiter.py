@@ -61,12 +61,9 @@ gpt35_limiter = RateLimiter(max_calls=900, period=60.0, name="gpt35")
 embeddings_limiter = RateLimiter(max_calls=1800, period=60.0, name="embeddings")
 
 async def rate_limited_call(func, limiter, *args, **kwargs):
-    """Utility function for making a rate-limited call"""
-    await limiter.acquire()
-    try:
-        return await func(*args, **kwargs)
-    finally:
-        limiter.release()
+    """Utility function for making a call without rate limiting (temporarily disabled)"""
+    # Simply pass through without using the limiter
+    return await func(*args, **kwargs)
 
 # Test function
 async def test_rate_limiter():
