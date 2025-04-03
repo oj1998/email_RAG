@@ -288,14 +288,16 @@ class SmartQueryIntentAnalyzer:
         logger.info(f"Intent analysis complete - Primary: {primary_intent.value}, Confidence: {confidence:.2f}, Urgency: {urgency}")
         return IntentAnalysis(
             primary_intent=primary_intent,
-            secondary_intent=secondary_intent,
-            metadata=IntentMetadata(
+            secondary_intents=[secondary_intent] if secondary_intent else [],  # Fix field name and make it a list
+            confidence=confidence,  # Add this required field
+            reasoning=reasoning,    # Add this required field
+            metadata=IntentMetadata(  # Convert this to a dict
                 confidence=confidence,
                 markers_found=self._get_markers(query, primary_intent),
                 context_signals=context_signals,
                 urgency_level=urgency,
                 reasoning=reasoning
-            )
+            ).dict()  # Convert to dictionary with .dict()
         )
 
     def _score_with_patterns(self, query: str) -> Dict[QueryIntent, float]:
