@@ -349,9 +349,44 @@ class ConstructionClassifier:
         start_time = datetime.now()
         
         # Create request tracking object
-        context_str = json.dumps(conversation_context) if conversation_context else "None"
-        current_str = json.dumps(current_context) if current_context else "None"
+        # Convert context to serializable format
+        if conversation_context:
+            if hasattr(conversation_context, 'dict'):
+                context_dict = conversation_context.dict()
+            elif isinstance(conversation_context, dict):
+                context_dict = conversation_context
+            else:
+                # Log what type of object we're dealing with for debugging
+                logger.debug(f"[CLASS-{request_id}] Conversation context is type: {type(conversation_context)}")
+                context_dict = {"note": "Context object could not be serialized"}
+        else:
+            context_dict = None
+            
+        # Same for current context
+        if current_context:
+            if hasattr(current_context, 'dict'):
+                current_dict = current_context.dict()
+            elif isinstance(current_context, dict):
+                current_dict = current_context
+            else:
+                logger.debug(f"[CLASS-{request_id}] Current context is type: {type(current_context)}")
+                current_dict = {"note": "Context object could not be serialized"}
+        else:
+            current_dict = None
         
+        # Now convert to strings (safely)
+        try:
+            context_str = json.dumps(context_dict) if context_dict else "None"
+        except Exception as e:
+            logger.warning(f"[CLASS-{request_id}] Could not serialize conversation context: {e}")
+            context_str = "None"
+            
+        try:
+            current_str = json.dumps(current_dict) if current_dict else "None"
+        except Exception as e:
+            logger.warning(f"[CLASS-{request_id}] Could not serialize current context: {e}")
+            current_str = "None"
+            
         request = ClassificationRequest(
             id=request_id,
             question=question,
@@ -437,20 +472,12 @@ class ConstructionClassifier:
             # Check if this is a comparison question
             is_comparison = await self.is_comparison_query(question)
             logger.debug(f"[CLASS-{request_id}] Comparison query check: {is_comparison}")
-            
-            # Convert ConversationContext to dict if needed
-            if conversation_context and hasattr(conversation_context, 'dict'):
-                context_dict = conversation_context.dict()
-            elif conversation_context and isinstance(conversation_context, dict):
-                context_dict = conversation_context
-            else:
-                context_dict = None
                 
             # Format the prompt with all context
             prompt = self.base_prompt.format_messages(
                 question=question,
-                conversation_context=json.dumps(context_dict) if context_dict else "None",
-                current_context=json.dumps(current_context) if current_context else "None"
+                conversation_context=context_str,
+                current_context=current_str
             )
             
             # Convert prompt to string for token counting
