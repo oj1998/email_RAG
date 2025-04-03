@@ -38,6 +38,37 @@ class ResponseWithSources(BaseModel):
     attributions: List[SourceAttribution] = []
     classification: Optional[QuestionType] = None
 
+class RateLimitedEmbeddings:
+    """Wrapper class for rate-limiting embeddings operations"""
+    
+    def __init__(self, embeddings_model):
+        self.embeddings_model = embeddings_model
+    
+    async def embed_query(self, text):
+        """Rate-limited version of embed_query"""
+        return await rate_limited_call(
+            self.embeddings_model.embed_query,
+            embeddings_limiter,
+            text
+        )
+    
+    async def embed_documents(self, texts):
+        """Rate-limited version of embed_documents"""
+        return await rate_limited_call(
+            self.embeddings_model.embed_documents,
+            embeddings_limiter,
+            texts
+        )
+        
+    # Provide access to original methods for cases where sync methods are needed
+    def embed_query(self, text):
+        """Pass-through to original sync method"""
+        return self.embeddings_model.embed_query(text)
+        
+    def embed_documents(self, texts):
+        """Pass-through to original sync method"""
+        return self.embeddings_model.embed_documents(texts)
+
 class EnhancedSmartResponseGenerator:
     def __init__(
         self,
@@ -52,35 +83,13 @@ class EnhancedSmartResponseGenerator:
         self.classifier = classifier
         self.min_confidence = min_confidence
         
-        # Initialize embeddings model if not provided, with rate limiting
+        # Initialize embeddings model with wrapper for rate limiting
         if embeddings_model:
-            self.embeddings_model = embeddings_model
+            self.embeddings_model = RateLimitedEmbeddings(embeddings_model)
         else:
-            # Create embeddings model with rate limiting
-            self.embeddings_model = OpenAIEmbeddings()
-            
-            # Monkey patch the embed_query and embed_documents methods for rate limiting
-            self._original_embed_query = self.embeddings_model.embed_query
-            self._original_embed_documents = self.embeddings_model.embed_documents
-            
-            # Create rate-limited versions of these methods
-            async def rate_limited_embed_query(text):
-                return await rate_limited_call(
-                    self._original_embed_query,
-                    embeddings_limiter,
-                    text
-                )
-            
-            async def rate_limited_embed_documents(texts):
-                return await rate_limited_call(
-                    self._original_embed_documents,
-                    embeddings_limiter,
-                    texts
-                )
-            
-            # Override the async versions
-            self.embeddings_model.aembed_query = rate_limited_embed_query
-            self.embeddings_model.aembed_documents = rate_limited_embed_documents
+            # Create a wrapped embeddings model with rate limiting
+            base_embeddings = OpenAIEmbeddings()
+            self.embeddings_model = RateLimitedEmbeddings(base_embeddings)
         
         # Rest of initialization (prompts, etc.)
         self.source_check_prompt = ChatPromptTemplate.from_messages([
@@ -253,7 +262,7 @@ class EnhancedSmartResponseGenerator:
             try:
                 # Create embeddings filter for minimum similarity with rate limiting
                 embeddings_filter = EmbeddingsFilter(
-                    embeddings=self.embeddings_model,
+                    embeddings=self.embeddings_model.embeddings_model,  # Use the underlying model
                     similarity_threshold=min_similarity
                 )
                 
@@ -332,11 +341,7 @@ class EnhancedSmartResponseGenerator:
         
         try:
             # Get response embedding with rate limiting
-            response_embedding = await rate_limited_call(
-                self.embeddings_model.embed_query,
-                embeddings_limiter,
-                response
-            )
+            response_embedding = await self.embeddings_model.embed_query(response)
             
             # For efficiency, batch document embeddings
             doc_contents = [doc.page_content for doc in documents if hasattr(doc, 'page_content') and doc.page_content.strip()]
@@ -362,11 +367,7 @@ class EnhancedSmartResponseGenerator:
                     doc_embedding = doc_embeddings[i]
                 else:
                     # Fallback if index mismatch
-                    doc_embedding = await rate_limited_call(
-                        self.embeddings_model.embed_query,
-                        embeddings_limiter,
-                        content
-                    )
+                    doc_embedding = await self.embeddings_model.embed_query(content)
                 
                 # Calculate semantic similarity using cosine similarity
                 semantic_similarity = np.dot(response_embedding, doc_embedding)
@@ -455,11 +456,7 @@ class EnhancedSmartResponseGenerator:
         
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i+batch_size]
-            batch_embeddings = await rate_limited_call(
-                self.embeddings_model.embed_documents,
-                embeddings_limiter,
-                batch
-            )
+            batch_embeddings = await self.embeddings_model.embed_documents(batch)
             all_embeddings.extend(batch_embeddings)
         
         return all_embeddings
