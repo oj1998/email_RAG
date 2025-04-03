@@ -27,10 +27,13 @@ class IntentMetadata(BaseModel):
     urgency_level: int  # 1-5
     reasoning: Optional[str] = None
 
+# In query_intent.py, IntentAnalysis class
 class IntentAnalysis(BaseModel):
     primary_intent: QueryIntent
-    secondary_intent: Optional[QueryIntent] = None
-    metadata: IntentMetadata
+    secondary_intents: List[QueryIntent] = []
+    confidence: float
+    reasoning: str
+    metadata: Optional[Dict] = {}  # Make optional with default empty dict
 
 class SmartQueryIntentAnalyzer:
     def __init__(self, use_embeddings: bool = False, use_llm: bool = True):
