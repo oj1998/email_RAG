@@ -48,6 +48,8 @@ from variance_integration import is_variance_analysis_query, process_variance_qu
 
 from knowledge_gaps import detect_knowledge_gap, create_knowledge_gap_router, KnowledgeGap
 
+from rate_limiter import gpt4_limiter, gpt35_limiter, embeddings_limiter, rate_limited_call
+
 query_router = APIRouter()
 
 logging.basicConfig(
