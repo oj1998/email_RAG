@@ -49,6 +49,7 @@ python-json-logger
 typing-extensions
 pydantic
 aiohttp
+tiktoken
 
 # Local Package
 -e .
