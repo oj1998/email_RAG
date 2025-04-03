@@ -113,6 +113,24 @@ class KnowledgeGapDetector:
             is_gap=False,
             confidence=1.0
         )
+
+        logger.info(f"Query: '{query}'")
+        logger.info(f"Retrieved content confidence: {retrieved_content_confidence}, threshold: {self.MIN_SOURCE_CONFIDENCE}")
+        
+        # Log individual document similarities
+        similarities = [
+            (doc.metadata.get('document_id', 'unknown'), 
+             doc.metadata.get('page', 'unknown'), 
+             doc.metadata.get('similarity', 0))
+            for doc in source_documents if hasattr(doc, 'metadata')
+        ]
+        logger.info(f"Document similarities: {similarities}")
+        
+        # Log the first few words of each document to verify content
+        for i, doc in enumerate(source_documents[:3]):  # Limit to first 3 docs
+            if hasattr(doc, 'page_content'):
+                preview = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
+                logger.info(f"Doc {i} preview: {preview}")
         
         # Check sufficient number of sources
         if len(source_documents) < self.MIN_SOURCE_COUNT:
