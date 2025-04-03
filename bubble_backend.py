@@ -650,323 +650,324 @@ async def process_document_query(
     conversation_context: Optional[Dict] = None
 ) -> Dict[str, Any]:
     """Enhanced document query processing with improved source attribution"""
-    start_time = datetime.utcnow()
-    
-    if not pool or not vector_store:
-        raise HTTPException(status_code=503, detail="Service not fully initialized")
-
-    try:
-        # Get question classification
-        classification = await classifier.classify_question(
-            question=request.query,
-            conversation_context=conversation_context,
-            current_context=request.context.dict()
-        )
-
-        # Perform intent analysis
-        intent_analyzer = SmartQueryIntentAnalyzer()
-        intent_analysis = await rate_limited_call(
-            intent_analyzer.analyze,
-            gpt35_limiter,  # Assume it uses GPT-3.5 for intent analysis
-            request.query, 
-            request.context.dict()
-        )
-
-        # Check for comparison queries (which we'll now route to variance analysis)
-        is_comparison = False
-        if hasattr(classification, 'suggested_format') and classification.suggested_format:
-            is_comparison = classification.suggested_format.get("is_comparison", False)
+    async with concurrent_query_semaphore:
+        start_time = datetime.utcnow()
         
-        # Route any comparison or variance queries to our new system
-        if is_comparison or classification.category == "COMPARISON" or is_variance_analysis_query(request.query):
-            logger.info(f"Routing to variance analysis for query: {request.query}")
-            return await process_variance_query(
-                request=request,
-                classification=classification,
-                vector_store=vector_store,
+        if not pool or not vector_store:
+            raise HTTPException(status_code=503, detail="Service not fully initialized")
+    
+        try:
+            # Get question classification
+            classification = await classifier.classify_question(
+                question=request.query,
                 conversation_context=conversation_context,
+                current_context=request.context.dict()
+            )
+    
+            # Perform intent analysis
+            intent_analyzer = SmartQueryIntentAnalyzer()
+            intent_analysis = await rate_limited_call(
+                intent_analyzer.analyze,
+                gpt35_limiter,  # Assume it uses GPT-3.5 for intent analysis
+                request.query, 
+                request.context.dict()
+            )
+    
+            # Check for comparison queries (which we'll now route to variance analysis)
+            is_comparison = False
+            if hasattr(classification, 'suggested_format') and classification.suggested_format:
+                is_comparison = classification.suggested_format.get("is_comparison", False)
+            
+            # Route any comparison or variance queries to our new system
+            if is_comparison or classification.category == "COMPARISON" or is_variance_analysis_query(request.query):
+                logger.info(f"Routing to variance analysis for query: {request.query}")
+                return await process_variance_query(
+                    request=request,
+                    classification=classification,
+                    vector_store=vector_store,
+                    conversation_context=conversation_context,
+                    intent_analysis=intent_analysis
+                )
+            
+            # Initialize enhanced response generator
+            enhanced_source_handler = EnhancedSmartResponseGenerator(
+                llm=ChatOpenAI(
+                    model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
+                    temperature=0.7
+                ),
+                vector_store=vector_store,
+                classifier=classifier,
+                min_confidence=0.6  # Adjustable threshold
+            )
+            
+            # Check if we need sources for this query
+            needs_sources = await enhanced_source_handler.should_use_sources(
+                query=request.query,
+                classification=classification,
                 intent_analysis=intent_analysis
             )
-        
-        # Initialize enhanced response generator
-        enhanced_source_handler = EnhancedSmartResponseGenerator(
-            llm=ChatOpenAI(
-                model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
-                temperature=0.7
-            ),
-            vector_store=vector_store,
-            classifier=classifier,
-            min_confidence=0.6  # Adjustable threshold
-        )
-        
-        # Check if we need sources for this query
-        needs_sources = await enhanced_source_handler.should_use_sources(
-            query=request.query,
-            classification=classification,
-            intent_analysis=intent_analysis
-        )
-        
-        # Configure search based on classification and request
-        metadata_filter = {}
-        if request.document_ids:
-            metadata_filter["document_id"] = {"$in": request.document_ids}
-        if request.metadata_filter:
-            metadata_filter.update(request.metadata_filter)
-
-        # Initialize memory with conversation history
-        memory = WeightedConversationMemory(
-            memory_key="chat_history",
-            return_messages=True,
-            output_key="answer",
-            decay_rate=0.1,
-            time_weight_factor=0.6,
-            relevance_weight_factor=0.4
-        )
-
-        if conversation_context and "chat_history" in conversation_context:
-            for message in conversation_context["chat_history"]:
-                if isinstance(message, dict):
-                    msg_type = HumanMessage if message.get("role") == "user" else AIMessage
-                    memory.chat_memory.add_message(msg_type(content=message.get("content", "")))
-
-        # Get relevant documents directly using the enhanced method
-        if needs_sources:
-            documents = await enhanced_source_handler._get_relevant_documents(
+            
+            # Configure search based on classification and request
+            metadata_filter = {}
+            if request.document_ids:
+                metadata_filter["document_id"] = {"$in": request.document_ids}
+            if request.metadata_filter:
+                metadata_filter.update(request.metadata_filter)
+    
+            # Initialize memory with conversation history
+            memory = WeightedConversationMemory(
+                memory_key="chat_history",
+                return_messages=True,
+                output_key="answer",
+                decay_rate=0.1,
+                time_weight_factor=0.6,
+                relevance_weight_factor=0.4
+            )
+    
+            if conversation_context and "chat_history" in conversation_context:
+                for message in conversation_context["chat_history"]:
+                    if isinstance(message, dict):
+                        msg_type = HumanMessage if message.get("role") == "user" else AIMessage
+                        memory.chat_memory.add_message(msg_type(content=message.get("content", "")))
+    
+            # Get relevant documents directly using the enhanced method
+            if needs_sources:
+                documents = await enhanced_source_handler._get_relevant_documents(
+                    query=request.query,
+                    classification=classification,
+                    metadata_filter=metadata_filter,
+                    k=8 if classification.category == "SAFETY" else 5
+                )
+            else:
+                documents = []
+    
+            retrieved_content_confidence = 0.0
+            if documents:
+                # Average the semantic similarities if available
+                similarities = [doc.metadata.get('similarity', 0) for doc in documents if hasattr(doc, 'metadata') and 'similarity' in doc.metadata]
+                if similarities:
+                    retrieved_content_confidence = sum(similarities) / len(similarities)
+                else:
+                    # Fallback to moderate confidence if similarity scores aren't available
+                    retrieved_content_confidence = 0.6 if len(documents) >= 3 else 0.4
+            
+            # Detect knowledge gaps
+            from knowledge_gaps.knowledge_gaps import detect_knowledge_gap
+            knowledge_gap = await detect_knowledge_gap(
                 query=request.query,
                 classification=classification,
-                metadata_filter=metadata_filter,
-                k=8 if classification.category == "SAFETY" else 5
+                source_documents=documents,
+                context=request.context.dict() if hasattr(request.context, 'dict') else {},
+                pool=pool
             )
-        else:
-            documents = []
-
-        retrieved_content_confidence = 0.0
-        if documents:
-            # Average the semantic similarities if available
-            similarities = [doc.metadata.get('similarity', 0) for doc in documents if hasattr(doc, 'metadata') and 'similarity' in doc.metadata]
-            if similarities:
-                retrieved_content_confidence = sum(similarities) / len(similarities)
-            else:
-                # Fallback to moderate confidence if similarity scores aren't available
-                retrieved_content_confidence = 0.6 if len(documents) >= 3 else 0.4
-        
-        # Detect knowledge gaps
-        from knowledge_gaps.knowledge_gaps import detect_knowledge_gap
-        knowledge_gap = await detect_knowledge_gap(
-            query=request.query,
-            classification=classification,
-            source_documents=documents,
-            context=request.context.dict() if hasattr(request.context, 'dict') else {},
-            pool=pool
-        )
-        
-        # Include knowledge gap information in the response metadata
-        knowledge_gap_metadata = None
-        if knowledge_gap.is_gap:
-            knowledge_gap_metadata = {
-                "gap_detected": True,
-                "gap_type": knowledge_gap.gap_type,
-                "domain": knowledge_gap.domain,
-                "subcategory": knowledge_gap.subcategory,
-                "recommended_action": knowledge_gap.recommended_action
-            }
-            logger.info(f"Knowledge gap detected: {knowledge_gap.domain}/{knowledge_gap.subcategory} - {knowledge_gap.gap_type}")
-
-        if knowledge_gap.is_gap:
-            # Generate a specialized "I don't know" response
-            start_gap_time = datetime.utcnow()
-            not_knowing_response = await generate_knowledge_gap_response(
-                query=request.query,
-                knowledge_gap=knowledge_gap,
-                classification=classification
-            )
-            processing_time = (datetime.utcnow() - start_gap_time).total_seconds()
             
-            # Return early with the specialized response
-            return {
+            # Include knowledge gap information in the response metadata
+            knowledge_gap_metadata = None
+            if knowledge_gap.is_gap:
+                knowledge_gap_metadata = {
+                    "gap_detected": True,
+                    "gap_type": knowledge_gap.gap_type,
+                    "domain": knowledge_gap.domain,
+                    "subcategory": knowledge_gap.subcategory,
+                    "recommended_action": knowledge_gap.recommended_action
+                }
+                logger.info(f"Knowledge gap detected: {knowledge_gap.domain}/{knowledge_gap.subcategory} - {knowledge_gap.gap_type}")
+    
+            if knowledge_gap.is_gap:
+                # Generate a specialized "I don't know" response
+                start_gap_time = datetime.utcnow()
+                not_knowing_response = await generate_knowledge_gap_response(
+                    query=request.query,
+                    knowledge_gap=knowledge_gap,
+                    classification=classification
+                )
+                processing_time = (datetime.utcnow() - start_gap_time).total_seconds()
+                
+                # Return early with the specialized response
+                return {
+                    "status": "success",
+                    "answer": not_knowing_response,
+                    "classification": classification.dict(),
+                    "sources": [],  # No sources since we don't know enough
+                    "metadata": ResponseMetadata(
+                        category="KNOWLEDGE_GAP",  # Override the category 
+                        confidence=classification.confidence,
+                        source_count=0,
+                        processing_time=processing_time,
+                        conversation_context_used=bool(conversation_context),
+                        intent_analysis=intent_analysis.dict() if intent_analysis else None,
+                        knowledge_gap=knowledge_gap_metadata,
+                        format_used="knowledge_gap_format"  # Custom format identifier
+                    ).dict()
+                }
+    
+            # Initialize QA chain with appropriate model
+            limiter = gpt4_limiter if classification.category == "SAFETY" else gpt35_limiter
+    
+            if documents:
+                # Create retriever with documents
+                from langchain.schema import Document
+                from langchain.retrievers.document_compressors import DocumentCompressorPipeline
+                from langchain.retrievers import ContextualCompressionRetriever
+                # Create a simple retriever from the documents
+                from langchain.retrievers import TimeWeightedVectorStoreRetriever
+                
+                retriever = vector_store.as_retriever(
+                    search_kwargs={
+                        "k": len(documents),
+                        "filter": metadata_filter if metadata_filter else None
+                    }
+                )
+                
+                qa = ConversationalRetrievalChain.from_llm(
+                    llm=ChatOpenAI(
+                        model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
+                        temperature=0.7
+                    ),
+                    retriever=retriever,
+                    memory=memory,
+                    return_source_documents=True,
+                    verbose=True
+                )
+                
+                # Define an async function that calls qa with rate limiting
+                async def execute_qa_with_rate_limit():
+                    await limiter.acquire()
+                    try:
+                        # We still need to run in executor because qa is not async
+                        return await asyncio.get_event_loop().run_in_executor(
+                            None, 
+                            lambda: qa({
+                                "question": request.query,
+                                "chat_history": memory.chat_memory.messages
+                            })
+                        )
+                    finally:
+                        limiter.release()
+            
+                # Execute with rate limiting
+                chain_response = await execute_qa_with_rate_limit()
+                
+                response_content = chain_response.get("answer", "No response generated")
+                source_documents = chain_response.get("source_documents", [])
+            else:
+                # For queries that don't need sources
+                simple_qa = ConversationalChain.from_llm(
+                    llm=ChatOpenAI(
+                        model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
+                        temperature=0.7
+                    ),
+                    memory=memory,
+                    verbose=True
+                )
+                
+                # Define an async function for the simple_qa with rate limiting
+                async def execute_simple_qa_with_rate_limit():
+                    await limiter.acquire()
+                    try:
+                        return await asyncio.get_event_loop().run_in_executor(
+                            None, 
+                            lambda: simple_qa({
+                                "question": request.query,
+                                "chat_history": memory.chat_memory.messages
+                            })
+                        )
+                    finally:
+                        limiter.release()
+                
+                # Execute with rate limiting
+                chain_response = await execute_simple_qa_with_rate_limit()
+                
+                response_content = chain_response.get("answer", "No response generated")
+                source_documents = []
+    
+            # Transform content based on classification and intent
+            transformer = NLPTransformer()
+            
+            formatted_response, intent_analysis = await transformer.transform_content(
+                query=request.query,
+                raw_response=response_content,
+                context=request.context.dict(),
+                source_documents=source_documents,
+                classification=classification.dict()
+            )
+    
+            # If we're using sources, extract attributions with the enhanced method
+            source_attributions = []
+            if needs_sources and source_documents:
+                source_attributions = await enhanced_source_handler._extract_attributions(
+                    response_content,
+                    source_documents,
+                    classification
+                )
+    
+            # Calculate processing time
+            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Prepare sources for response
+            sources = []
+            if needs_sources and source_attributions:
+                for attr in source_attributions:
+                    # Check if this is an EnhancedSourceAttribution
+                    if hasattr(attr, 'semantic_similarity'):
+                        # Include enhanced attributes
+                        sources.append({
+                            "id": attr.source_id,
+                            "title": attr.title or next(
+                                (doc.metadata.get("title") for doc in source_documents 
+                                 if doc.metadata.get("document_id") == attr.source_id),
+                                "Unknown Document"
+                            ),
+                            "page": attr.page_number,
+                            "confidence": attr.confidence,
+                            "semantic_similarity": attr.semantic_similarity,
+                            "content_overlap": attr.content_overlap,
+                            "excerpt": attr.content,
+                            "document_type": attr.document_type
+                        })
+                    else:
+                        # Standard attribution format
+                        sources.append({
+                            "id": attr.source_id,
+                            "title": next(
+                                (doc.metadata.get("title") for doc in source_documents 
+                                 if doc.metadata.get("document_id") == attr.source_id),
+                                "Unknown Document"
+                            ),
+                            "page": attr.page_number,
+                            "confidence": attr.confidence,
+                            "excerpt": attr.content
+                        })
+            
+            format_mapper = FormatMapper()
+            category_format = format_mapper.get_format_for_category(classification.category)
+            validation_errors = []
+    
+            # Prepare response
+            response = {
                 "status": "success",
-                "answer": not_knowing_response,
+                "answer": formatted_response,
                 "classification": classification.dict(),
-                "sources": [],  # No sources since we don't know enough
+                "sources": sources,
                 "metadata": ResponseMetadata(
-                    category="KNOWLEDGE_GAP",  # Override the category 
+                    category=classification.category,
                     confidence=classification.confidence,
-                    source_count=0,
+                    source_count=len(source_documents),
                     processing_time=processing_time,
                     conversation_context_used=bool(conversation_context),
-                    intent_analysis=intent_analysis.dict() if intent_analysis else None,
+                    intent_analysis=intent_analysis.dict(),
                     knowledge_gap=knowledge_gap_metadata,
-                    format_used="knowledge_gap_format"  # Custom format identifier
+                    format_used=getattr(category_format, 'style', FormatStyle.NARRATIVE).value 
+                               if hasattr(category_format, 'style') else "unknown",
+                    format_validation_errors=validation_errors if 'validation_errors' in locals() else []
                 ).dict()
             }
-
-        # Initialize QA chain with appropriate model
-        limiter = gpt4_limiter if classification.category == "SAFETY" else gpt35_limiter
-
-        if documents:
-            # Create retriever with documents
-            from langchain.schema import Document
-            from langchain.retrievers.document_compressors import DocumentCompressorPipeline
-            from langchain.retrievers import ContextualCompressionRetriever
-            # Create a simple retriever from the documents
-            from langchain.retrievers import TimeWeightedVectorStoreRetriever
-            
-            retriever = vector_store.as_retriever(
-                search_kwargs={
-                    "k": len(documents),
-                    "filter": metadata_filter if metadata_filter else None
-                }
-            )
-            
-            qa = ConversationalRetrievalChain.from_llm(
-                llm=ChatOpenAI(
-                    model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
-                    temperature=0.7
-                ),
-                retriever=retriever,
-                memory=memory,
-                return_source_documents=True,
-                verbose=True
-            )
-            
-            # Define an async function that calls qa with rate limiting
-            async def execute_qa_with_rate_limit():
-                await limiter.acquire()
-                try:
-                    # We still need to run in executor because qa is not async
-                    return await asyncio.get_event_loop().run_in_executor(
-                        None, 
-                        lambda: qa({
-                            "question": request.query,
-                            "chat_history": memory.chat_memory.messages
-                        })
-                    )
-                finally:
-                    limiter.release()
-        
-            # Execute with rate limiting
-            chain_response = await execute_qa_with_rate_limit()
-            
-            response_content = chain_response.get("answer", "No response generated")
-            source_documents = chain_response.get("source_documents", [])
-        else:
-            # For queries that don't need sources
-            simple_qa = ConversationalChain.from_llm(
-                llm=ChatOpenAI(
-                    model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
-                    temperature=0.7
-                ),
-                memory=memory,
-                verbose=True
-            )
-            
-            # Define an async function for the simple_qa with rate limiting
-            async def execute_simple_qa_with_rate_limit():
-                await limiter.acquire()
-                try:
-                    return await asyncio.get_event_loop().run_in_executor(
-                        None, 
-                        lambda: simple_qa({
-                            "question": request.query,
-                            "chat_history": memory.chat_memory.messages
-                        })
-                    )
-                finally:
-                    limiter.release()
-            
-            # Execute with rate limiting
-            chain_response = await execute_simple_qa_with_rate_limit()
-            
-            response_content = chain_response.get("answer", "No response generated")
-            source_documents = []
-
-        # Transform content based on classification and intent
-        transformer = NLPTransformer()
-        
-        formatted_response, intent_analysis = await transformer.transform_content(
-            query=request.query,
-            raw_response=response_content,
-            context=request.context.dict(),
-            source_documents=source_documents,
-            classification=classification.dict()
-        )
-
-        # If we're using sources, extract attributions with the enhanced method
-        source_attributions = []
-        if needs_sources and source_documents:
-            source_attributions = await enhanced_source_handler._extract_attributions(
-                response_content,
-                source_documents,
-                classification
-            )
-
-        # Calculate processing time
-        processing_time = (datetime.utcnow() - start_time).total_seconds()
-        
-        # Prepare sources for response
-        sources = []
-        if needs_sources and source_attributions:
-            for attr in source_attributions:
-                # Check if this is an EnhancedSourceAttribution
-                if hasattr(attr, 'semantic_similarity'):
-                    # Include enhanced attributes
-                    sources.append({
-                        "id": attr.source_id,
-                        "title": attr.title or next(
-                            (doc.metadata.get("title") for doc in source_documents 
-                             if doc.metadata.get("document_id") == attr.source_id),
-                            "Unknown Document"
-                        ),
-                        "page": attr.page_number,
-                        "confidence": attr.confidence,
-                        "semantic_similarity": attr.semantic_similarity,
-                        "content_overlap": attr.content_overlap,
-                        "excerpt": attr.content,
-                        "document_type": attr.document_type
-                    })
-                else:
-                    # Standard attribution format
-                    sources.append({
-                        "id": attr.source_id,
-                        "title": next(
-                            (doc.metadata.get("title") for doc in source_documents 
-                             if doc.metadata.get("document_id") == attr.source_id),
-                            "Unknown Document"
-                        ),
-                        "page": attr.page_number,
-                        "confidence": attr.confidence,
-                        "excerpt": attr.content
-                    })
-        
-        format_mapper = FormatMapper()
-        category_format = format_mapper.get_format_for_category(classification.category)
-        validation_errors = []
-
-        # Prepare response
-        response = {
-            "status": "success",
-            "answer": formatted_response,
-            "classification": classification.dict(),
-            "sources": sources,
-            "metadata": ResponseMetadata(
-                category=classification.category,
-                confidence=classification.confidence,
-                source_count=len(source_documents),
-                processing_time=processing_time,
-                conversation_context_used=bool(conversation_context),
-                intent_analysis=intent_analysis.dict(),
-                knowledge_gap=knowledge_gap_metadata,
-                format_used=getattr(category_format, 'style', FormatStyle.NARRATIVE).value 
-                           if hasattr(category_format, 'style') else "unknown",
-                format_validation_errors=validation_errors if 'validation_errors' in locals() else []
-            ).dict()
-        }
-
-        return response
-
-    except Exception as e:
-        logger.error(f"Error in document query processing: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    
+            return response
+    
+        except Exception as e:
+            logger.error(f"Error in document query processing: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
 
 def is_email_query(request: QueryRequest) -> bool:
     """Determine if the query should be routed to email system"""
