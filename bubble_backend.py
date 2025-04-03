@@ -367,6 +367,17 @@ class NLPTransformer:
             
             Response:"""
         )
+
+        limiter = gpt4_limiter if "gpt-4" in self.llm.model_name else gpt35_limiter
+        response = await rate_limited_call(
+            self.llm.agenerate,
+            limiter,
+            [prompt.format(
+                content=content,
+                category=category,
+                intent=intent_analysis.primary_intent.value
+            )]
+        )
         
         response = await self.llm.agenerate([prompt.format(
             content=content,
@@ -449,10 +460,16 @@ class NLPTransformer:
             Restructured content:"""
         )
         
-        response = await self.llm.agenerate(prompt.format(
-            content=content,
-            missing_sections=", ".join(validation_errors)
-        ))
+        # Add rate limiting here
+        limiter = gpt4_limiter if "gpt-4" in self.llm.model_name else gpt35_limiter
+        response = await rate_limited_call(
+            self.llm.agenerate,
+            limiter,
+            [prompt.format(
+                content=content,
+                missing_sections=", ".join(validation_errors)
+            )]
+        )
         
         # Check if response is a list or has generations attribute
         if hasattr(response, 'generations') and response.generations:
@@ -624,7 +641,13 @@ async def generate_knowledge_gap_response(
     Response:
     """
     
-    response = await llm.ainvoke(prompt)
+    # Add rate limiting here
+    response = await rate_limited_call(
+        llm.ainvoke,
+        gpt35_limiter,  # Using GPT-3.5 limiter since the model is gpt-3.5-turbo
+        prompt
+    )
+    
     return response.content
 
 
@@ -648,7 +671,9 @@ async def process_document_query(
 
         # Perform intent analysis
         intent_analyzer = SmartQueryIntentAnalyzer()
-        intent_analysis = await intent_analyzer.analyze(
+        intent_analysis = await rate_limited_call(
+            intent_analyzer.analyze,
+            gpt35_limiter,  # Assume it uses GPT-3.5 for intent analysis
             request.query, 
             request.context.dict()
         )
@@ -782,12 +807,13 @@ async def process_document_query(
             }
 
         # Initialize QA chain with appropriate model
+        limiter = gpt4_limiter if classification.category == "SAFETY" else gpt35_limiter
+
         if documents:
             # Create retriever with documents
             from langchain.schema import Document
             from langchain.retrievers.document_compressors import DocumentCompressorPipeline
             from langchain.retrievers import ContextualCompressionRetriever
-
             # Create a simple retriever from the documents
             from langchain.retrievers import TimeWeightedVectorStoreRetriever
             
@@ -809,14 +835,23 @@ async def process_document_query(
                 verbose=True
             )
             
-            # Execute chain with classification context
-            chain_response = await asyncio.get_event_loop().run_in_executor(
-                None, 
-                lambda: qa({
-                    "question": request.query,
-                    "chat_history": memory.chat_memory.messages
-                })
-            )
+            # Define an async function that calls qa with rate limiting
+            async def execute_qa_with_rate_limit():
+                await limiter.acquire()
+                try:
+                    # We still need to run in executor because qa is not async
+                    return await asyncio.get_event_loop().run_in_executor(
+                        None, 
+                        lambda: qa({
+                            "question": request.query,
+                            "chat_history": memory.chat_memory.messages
+                        })
+                    )
+                finally:
+                    limiter.release()
+        
+            # Execute with rate limiting
+            chain_response = await execute_qa_with_rate_limit()
             
             response_content = chain_response.get("answer", "No response generated")
             source_documents = chain_response.get("source_documents", [])
@@ -831,13 +866,22 @@ async def process_document_query(
                 verbose=True
             )
             
-            chain_response = await asyncio.get_event_loop().run_in_executor(
-                None, 
-                lambda: simple_qa({
-                    "question": request.query,
-                    "chat_history": memory.chat_memory.messages
-                })
-            )
+            # Define an async function for the simple_qa with rate limiting
+            async def execute_simple_qa_with_rate_limit():
+                await limiter.acquire()
+                try:
+                    return await asyncio.get_event_loop().run_in_executor(
+                        None, 
+                        lambda: simple_qa({
+                            "question": request.query,
+                            "chat_history": memory.chat_memory.messages
+                        })
+                    )
+                finally:
+                    limiter.release()
+            
+            # Execute with rate limiting
+            chain_response = await execute_simple_qa_with_rate_limit()
             
             response_content = chain_response.get("answer", "No response generated")
             source_documents = []
