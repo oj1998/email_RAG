@@ -168,7 +168,7 @@ class EnhancedSmartResponseGenerator:
         query: str,
         classification: QuestionType,
         metadata_filter: Optional[Dict[str, Any]] = None,
-        k: int = 3  # Reduced from 5 to 3 by default
+        k: int = 2  # Reduced from 5 to 3 by default
     ) -> List[Document]:
         """Get relevant documents with reduced count to limit API calls
         
@@ -182,12 +182,12 @@ class EnhancedSmartResponseGenerator:
             List[Document]: Relevant documents
         """
         # Adjust search parameters based on classification - use more conservative values
-        search_k = min(k + 2, 5) if classification.category == "SAFETY" else k
+        search_k = min(k + 2, 2) if classification.category == "SAFETY" else k
         
         # Set up search kwargs
         search_kwargs = {
             "k": search_k,
-            "fetch_k": min(search_k * 2, 10)  # More conservative fetch_k
+            "fetch_k": min(search_k * 2, 2)  # More conservative fetch_k
         }
         
         # Add metadata filter if provided
