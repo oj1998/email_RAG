@@ -13,7 +13,6 @@ import logging
 import numpy as np
 import asyncio
 from datetime import datetime
-from rate_limiter import gpt4_limiter, gpt35_limiter, embeddings_limiter, rate_limited_call
 
 logger = logging.getLogger(__name__)
 
@@ -39,35 +38,20 @@ class ResponseWithSources(BaseModel):
     classification: Optional[QuestionType] = None
 
 class RateLimitedEmbeddings:
-    """Wrapper class for rate-limiting embeddings operations"""
+    """Wrapper class for embeddings operations"""
     
     def __init__(self, embeddings_model):
         self.embeddings_model = embeddings_model
     
     async def embed_query(self, text):
-        """Rate-limited version of embed_query"""
-        return await rate_limited_call(
-            self.embeddings_model.embed_query,
-            embeddings_limiter,
-            text
-        )
+        """Async version of embed_query"""
+        import asyncio
+        return await asyncio.to_thread(self.embeddings_model.embed_query, text)
     
     async def embed_documents(self, texts):
-        """Rate-limited version of embed_documents"""
-        return await rate_limited_call(
-            self.embeddings_model.embed_documents,
-            embeddings_limiter,
-            texts
-        )
-        
-    # Provide access to original methods for cases where sync methods are needed
-    def embed_query(self, text):
-        """Pass-through to original sync method"""
-        return self.embeddings_model.embed_query(text)
-        
-    def embed_documents(self, texts):
-        """Pass-through to original sync method"""
-        return self.embeddings_model.embed_documents(texts)
+        """Async version of embed_documents"""
+        import asyncio
+        return await asyncio.to_thread(self.embeddings_model.embed_documents, texts)
 
 class EnhancedSmartResponseGenerator:
     def __init__(
@@ -83,15 +67,14 @@ class EnhancedSmartResponseGenerator:
         self.classifier = classifier
         self.min_confidence = min_confidence
         
-        # Initialize embeddings model with wrapper for rate limiting
+        # Initialize embeddings model
         if embeddings_model:
-            self.embeddings_model = RateLimitedEmbeddings(embeddings_model)
+            self.embeddings_model = embeddings_model
         else:
-            # Create a wrapped embeddings model with rate limiting
-            base_embeddings = OpenAIEmbeddings()
-            self.embeddings_model = RateLimitedEmbeddings(base_embeddings)
+            # Create default embeddings model
+            self.embeddings_model = OpenAIEmbeddings()
         
-        # Rest of initialization (prompts, etc.)
+        # Set up prompts
         self.source_check_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are a construction knowledge expert. Analyze if this construction-related 
             question requires specific sourced information rather than general knowledge.
@@ -121,7 +104,7 @@ class EnhancedSmartResponseGenerator:
             ("user", "Question: {query}\nCategory: {category}\nContext Documents: {context}")
         ])
 
-    async def should_use_sources(
+async def should_use_sources(
         self,
         query: str,
         classification: QuestionType,
@@ -137,7 +120,6 @@ class EnhancedSmartResponseGenerator:
         Returns:
             bool: Whether sources should be used for this query
         """
-        # No changes to this method's logic - original logic works well
         # Very short queries likely don't need sources
         if len(query.strip()) < 15:
             return False
@@ -167,11 +149,7 @@ class EnhancedSmartResponseGenerator:
         
         # For everything else, use a simple check for very basic responses
         if len(query.split()) <= 5:  # Queries with 5 or fewer words
-            # Add rate limiting here
-            limiter = gpt4_limiter if "gpt-4" in self.llm.model_name else gpt35_limiter
-            response = await rate_limited_call(
-                self.llm.ainvoke,
-                limiter,
+            response = await self.llm.ainvoke(
                 ChatPromptTemplate.from_messages([
                     ("system", """Determine if this is a simple question requiring only a yes/no or very basic response.
                     Output ONLY 'BASIC' or 'COMPLEX'."""),
@@ -190,48 +168,52 @@ class EnhancedSmartResponseGenerator:
         query: str,
         classification: QuestionType,
         metadata_filter: Optional[Dict[str, Any]] = None,
-        k: int = 5
+        k: int = 3  # Reduced from 5 to 3 by default
     ) -> List[Document]:
-        """Get relevant documents with enhanced retrieval
+        """Get relevant documents with reduced count to limit API calls
         
         Args:
             query: The user's question
             classification: The question category classification
             metadata_filter: Optional dict of metadata filters
-            k: Number of documents to retrieve
+            k: Number of documents to retrieve (reduced default)
             
         Returns:
             List[Document]: Relevant documents
         """
-        # Adjust search parameters based on classification
-        search_k = k * 2 if classification.category == "SAFETY" else k
-        min_similarity = 0.7 if classification.category == "SAFETY" else self.min_confidence
+        # Adjust search parameters based on classification - use more conservative values
+        search_k = min(k + 2, 5) if classification.category == "SAFETY" else k
         
         # Set up search kwargs
         search_kwargs = {
-            "k": search_k,  # Get more results than needed for filtering
-            "fetch_k": search_k * 2,  # Consider more candidates
-            "lambda_mult": 0.5  # Balance between relevance and diversity
+            "k": search_k,
+            "fetch_k": min(search_k * 2, 10)  # More conservative fetch_k
         }
         
         # Add metadata filter if provided
         if metadata_filter:
             search_kwargs["filter"] = metadata_filter
         
-        # Get documents with scores directly from vector store
+        # Get documents with scores
         try:
-            # Use rate limiting for similarity search
-            async def rate_limited_similarity_search():
-                await embeddings_limiter.acquire()
-                try:
-                    return await asyncio.get_event_loop().run_in_executor(
-                        None,
-                        lambda: self.vector_store.similarity_search_with_score(query, **search_kwargs)
-                    )
-                finally:
-                    embeddings_limiter.release()
+            logger.info(f"Retrieving documents for query (k={search_k})")
             
-            docs_with_scores = await rate_limited_similarity_search()
+            # Use asyncio.to_thread for better async handling
+            try:
+                docs_with_scores = await asyncio.to_thread(
+                    self.vector_store.similarity_search_with_score,
+                    query,
+                    **search_kwargs
+                )
+            except Exception as e:
+                logger.warning(f"similarity_search_with_score failed: {str(e)}, falling back to basic retrieval")
+                docs = await asyncio.to_thread(
+                    self.vector_store.similarity_search,
+                    query,
+                    k=search_k
+                )
+                # Create dummy scores
+                docs_with_scores = [(doc, 0.75) for doc in docs]
             
             # Add scores to document metadata
             docs = []
@@ -239,80 +221,53 @@ class EnhancedSmartResponseGenerator:
                 doc.metadata['similarity'] = float(score)
                 docs.append(doc)
                 
-            logger.info(f"Retrieved {len(docs)} relevant documents with scores")
-            
-            # Apply embeddings filter if min_similarity is specified
-            if min_similarity > 0:
-                filtered_docs = [doc for doc in docs if doc.metadata.get('similarity', 0) >= min_similarity]
-                if filtered_docs:
-                    logger.info(f"Filtered to {len(filtered_docs)} documents above similarity threshold {min_similarity}")
-                    docs = filtered_docs
-            
+            logger.info(f"Retrieved {len(docs)} relevant documents")
             return docs
             
         except Exception as e:
-            logger.error(f"Error retrieving documents with scores: {str(e)}")
+            logger.error(f"Error retrieving documents: {str(e)}")
+            # Return empty list on failure rather than crashing
+            return []
+
+async def _batch_embed_documents(self, texts, batch_size=100):
+        """Batch process document embeddings with optimal batch size
+        
+        Args:
+            texts: List of text strings to embed
+            batch_size: Size of batches to process (default 100)
             
-            # Fall back to basic retriever if similarity_search_with_score fails
-            retriever = self.vector_store.as_retriever(
-                search_type="similarity",
-                search_kwargs=search_kwargs
-            )
-            
+        Returns:
+            List of embeddings for all texts
+        """
+        if not texts:
+            return []
+        
+        # Group texts into sensible batches
+        batches = [texts[i:i+batch_size] for i in range(0, len(texts), batch_size)]
+        
+        logger.info(f"Processing {len(texts)} texts in {len(batches)} batches")
+        
+        all_embeddings = []
+        
+        for i, batch in enumerate(batches):
             try:
-                # Create embeddings filter for minimum similarity with rate limiting
-                embeddings_filter = EmbeddingsFilter(
-                    embeddings=self.embeddings_model.embeddings_model,  # Use the underlying model
-                    similarity_threshold=min_similarity
+                logger.info(f"Embedding batch {i+1}/{len(batches)} with {len(batch)} texts")
+                # Use asyncio.to_thread for better async handling
+                batch_embeddings = await asyncio.to_thread(
+                    self.embeddings_model.embed_documents,
+                    batch
                 )
-                
-                filtered_retriever = ContextualCompressionRetriever(
-                    base_retriever=retriever,
-                    base_compressor=embeddings_filter
-                )
-                
-                # Apply rate limiting to the fallback retrieval
-                async def rate_limited_retrieval():
-                    await embeddings_limiter.acquire()
-                    try:
-                        return await asyncio.get_event_loop().run_in_executor(
-                            None,
-                            lambda: filtered_retriever.get_relevant_documents(query)
-                        )
-                    finally:
-                        embeddings_limiter.release()
-                
-                docs = await rate_limited_retrieval()
-                
-                # Since filtered_retriever doesn't provide scores, add default high scores
-                for doc in docs:
-                    doc.metadata['similarity'] = 0.8  # Default high score above threshold
-                    
-                logger.info(f"Retrieved {len(docs)} documents using filtered retriever with default scores")
-                return docs
-                
-            except Exception as inner_e:
-                logger.error(f"Error with filtered retrieval: {str(inner_e)}")
-                
-                # Final fallback to basic retrieval with rate limiting
-                async def rate_limited_basic_retrieval():
-                    await embeddings_limiter.acquire()
-                    try:
-                        return await asyncio.get_event_loop().run_in_executor(
-                            None,
-                            lambda: retriever.get_relevant_documents(query)
-                        )
-                    finally:
-                        embeddings_limiter.release()
-                
-                docs = await rate_limited_basic_retrieval()
-                
-                # Add default scores that will pass your threshold
-                for doc in docs:
-                    doc.metadata['similarity'] = 0.75  # Above your threshold
-                    
-                logger.info(f"Fall back retrieval: {len(docs)} documents with default scores")
-                return docs
+                all_embeddings.extend(batch_embeddings)
+                logger.info(f"Successfully embedded batch {i+1}")
+            except Exception as e:
+                logger.error(f"Error embedding batch {i+1}: {str(e)}")
+                # Generate fallback embeddings for failed batch
+                import numpy as np
+                fallback_embeddings = [np.random.normal(0, 0.01, 1536).tolist() for _ in range(len(batch))]
+                all_embeddings.extend(fallback_embeddings)
+                logger.warning(f"Using fallback embeddings for batch {i+1}")
+        
+        return all_embeddings
 
     async def _extract_attributions(
         self,
@@ -320,16 +275,7 @@ class EnhancedSmartResponseGenerator:
         documents: List[Document],
         classification: QuestionType
     ) -> List[SourceAttribution]:
-        """Extract source attributions using enhanced vector-based similarity
-        
-        Args:
-            response: The generated response text
-            documents: List of source documents
-            classification: The question classification
-            
-        Returns:
-            List[SourceAttribution]: Source attributions with confidence scores
-        """
+        """Extract source attributions with improved batching"""
         # Start timing for performance monitoring
         start_time = datetime.utcnow()
         
@@ -340,75 +286,64 @@ class EnhancedSmartResponseGenerator:
         attributions = []
         
         try:
-            # Get response embedding with rate limiting
-            response_embedding = await self.embeddings_model.embed_query(response)
+            # Get response embedding only once
+            response_embedding = await asyncio.to_thread(
+                self.embeddings_model.embed_query, 
+                response
+            )
             
-            # For efficiency, batch document embeddings
-            doc_contents = [doc.page_content for doc in documents if hasattr(doc, 'page_content') and doc.page_content.strip()]
+            # Extract all document contents first to enable batching
+            doc_contents = []
+            valid_docs = []
+            
+            for doc in documents:
+                if hasattr(doc, 'page_content') and doc.page_content.strip():
+                    doc_contents.append(doc.page_content)
+                    valid_docs.append(doc)
             
             # Skip processing if no valid documents
             if not doc_contents:
                 return []
                 
-            # Use batched embeddings with rate limiting
+            # Use batched embeddings
+            logger.info(f"Batching embeddings for {len(doc_contents)} documents")
             doc_embeddings = await self._batch_embed_documents(doc_contents)
             
             # Process each document for attribution
-            for i, doc in enumerate(documents):
-                # Skip empty or invalid documents
-                if not hasattr(doc, 'page_content') or not doc.page_content.strip():
+            for i, doc in enumerate(valid_docs):
+                if i >= len(doc_embeddings):
                     continue
-                
+                    
                 content = doc.page_content
                 metadata = doc.metadata or {}
                 
                 # Use the precomputed embedding
-                if i < len(doc_embeddings):
-                    doc_embedding = doc_embeddings[i]
-                else:
-                    # Fallback if index mismatch
-                    doc_embedding = await self.embeddings_model.embed_query(content)
+                doc_embedding = doc_embeddings[i]
                 
                 # Calculate semantic similarity using cosine similarity
                 semantic_similarity = np.dot(response_embedding, doc_embedding)
-                # Convert from [-1,1] to [0,1] range
-                semantic_similarity = (semantic_similarity + 1) / 2
+                semantic_similarity = (semantic_similarity + 1) / 2  # Convert to 0-1 range
                 
-                # Calculate content overlap (simpler word-based similarity as a cross-check)
+                # Calculate simple content overlap for a cross-check
                 content_overlap = self._calculate_content_overlap(response, content)
                 
                 # Compute weighted final confidence
-                # More weight to semantic similarity, but consider content overlap
                 semantic_weight = 0.7
                 overlap_weight = 0.3
                 
-                # Adjust weights for safety content
-                if classification.category == "SAFETY":
-                    semantic_weight = 0.6
-                    overlap_weight = 0.4  # Exact matches more important for safety
-                
-                # Calculate combined confidence score
                 confidence = (
                     semantic_weight * semantic_similarity +
                     overlap_weight * content_overlap
                 )
                 
-                # Apply category-based adjustments
-                if classification.category == "SAFETY":
-                    # Boost safety documents
-                    confidence = min(0.98, confidence * 1.15)
-                
                 # Skip if below threshold
                 if confidence < self.min_confidence:
                     continue
                     
-                # Find the most relevant excerpt from the document
-                excerpt = self._extract_best_excerpt(content, response)
-                
                 # Create attribution with enhanced details
                 attributions.append(
                     EnhancedSourceAttribution(
-                        content=excerpt,
+                        content=content[:200] + "..." if len(content) > 200 else content,
                         source_id=metadata.get('document_id', metadata.get('source_id')),
                         page_number=metadata.get('page'),
                         confidence=round(float(confidence), 4),
@@ -424,16 +359,16 @@ class EnhancedSmartResponseGenerator:
             
             # Calculate processing time
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            logger.debug(f"Attribution extraction took {processing_time:.2f}ms")
+            logger.info(f"Attribution extraction took {processing_time:.2f}ms")
             
             return attributions
             
         except Exception as e:
             logger.error(f"Error in attribution extraction: {str(e)}")
             
-            # Fall back to simple attribution if vector-based fails
+            # Simple fallback if extraction fails
             fallback_attributions = []
-            for doc in documents:
+            for doc in documents[:3]:  # Limit to first 3 docs to reduce processing
                 if hasattr(doc, 'metadata') and hasattr(doc, 'page_content'):
                     metadata = doc.metadata or {}
                     fallback_attributions.append(
@@ -441,27 +376,12 @@ class EnhancedSmartResponseGenerator:
                             content=doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
                             source_id=metadata.get('document_id', metadata.get('source_id')),
                             page_number=metadata.get('page'),
-                            confidence=0.8 if classification.category == "SAFETY" else 0.7
+                            confidence=0.7
                         )
                     )
             return fallback_attributions
 
-    async def _batch_embed_documents(self, texts, batch_size=20):
-        """Batch process document embeddings with rate limiting"""
-        if not texts:
-            return []
-        
-        # Process in batches to reduce API calls
-        all_embeddings = []
-        
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i+batch_size]
-            batch_embeddings = await self.embeddings_model.embed_documents(batch)
-            all_embeddings.extend(batch_embeddings)
-        
-        return all_embeddings
-
-    def _calculate_content_overlap(self, text1: str, text2: str) -> float:
+def _calculate_content_overlap(self, text1: str, text2: str) -> float:
         """Calculate content overlap using improved word-based similarity
         
         Args:
