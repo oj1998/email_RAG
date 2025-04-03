@@ -13,6 +13,7 @@ import logging
 import numpy as np
 import asyncio
 from datetime import datetime
+from rate_limiter import gpt4_limiter, gpt35_limiter, embeddings_limiter, rate_limited_call
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class ResponseWithSources(BaseModel):
     needs_sources: bool
     attributions: List[SourceAttribution] = []
     classification: Optional[QuestionType] = None
-    
+
 class EnhancedSmartResponseGenerator:
     def __init__(
         self,
@@ -51,10 +52,37 @@ class EnhancedSmartResponseGenerator:
         self.classifier = classifier
         self.min_confidence = min_confidence
         
-        # Initialize embeddings model if not provided
-        self.embeddings_model = embeddings_model or OpenAIEmbeddings()
+        # Initialize embeddings model if not provided, with rate limiting
+        if embeddings_model:
+            self.embeddings_model = embeddings_model
+        else:
+            # Create embeddings model with rate limiting
+            self.embeddings_model = OpenAIEmbeddings()
+            
+            # Monkey patch the embed_query and embed_documents methods for rate limiting
+            self._original_embed_query = self.embeddings_model.embed_query
+            self._original_embed_documents = self.embeddings_model.embed_documents
+            
+            # Create rate-limited versions of these methods
+            async def rate_limited_embed_query(text):
+                return await rate_limited_call(
+                    self._original_embed_query,
+                    embeddings_limiter,
+                    text
+                )
+            
+            async def rate_limited_embed_documents(texts):
+                return await rate_limited_call(
+                    self._original_embed_documents,
+                    embeddings_limiter,
+                    texts
+                )
+            
+            # Override the async versions
+            self.embeddings_model.aembed_query = rate_limited_embed_query
+            self.embeddings_model.aembed_documents = rate_limited_embed_documents
         
-        # Rest of initialization (prompts, etc.) remains the same
+        # Rest of initialization (prompts, etc.)
         self.source_check_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are a construction knowledge expert. Analyze if this construction-related 
             question requires specific sourced information rather than general knowledge.
@@ -100,7 +128,7 @@ class EnhancedSmartResponseGenerator:
         Returns:
             bool: Whether sources should be used for this query
         """
-        # No changes to this method - original logic works well
+        # No changes to this method's logic - original logic works well
         # Very short queries likely don't need sources
         if len(query.strip()) < 15:
             return False
@@ -130,7 +158,11 @@ class EnhancedSmartResponseGenerator:
         
         # For everything else, use a simple check for very basic responses
         if len(query.split()) <= 5:  # Queries with 5 or fewer words
-            response = await self.llm.ainvoke(
+            # Add rate limiting here
+            limiter = gpt4_limiter if "gpt-4" in self.llm.model_name else gpt35_limiter
+            response = await rate_limited_call(
+                self.llm.ainvoke,
+                limiter,
                 ChatPromptTemplate.from_messages([
                     ("system", """Determine if this is a simple question requiring only a yes/no or very basic response.
                     Output ONLY 'BASIC' or 'COMPLEX'."""),
@@ -179,10 +211,18 @@ class EnhancedSmartResponseGenerator:
         
         # Get documents with scores directly from vector store
         try:
-            docs_with_scores = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.vector_store.similarity_search_with_score(query, **search_kwargs)
-            )
+            # Use rate limiting for similarity search
+            async def rate_limited_similarity_search():
+                await embeddings_limiter.acquire()
+                try:
+                    return await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: self.vector_store.similarity_search_with_score(query, **search_kwargs)
+                    )
+                finally:
+                    embeddings_limiter.release()
+            
+            docs_with_scores = await rate_limited_similarity_search()
             
             # Add scores to document metadata
             docs = []
@@ -211,7 +251,7 @@ class EnhancedSmartResponseGenerator:
             )
             
             try:
-                # Create embeddings filter for minimum similarity
+                # Create embeddings filter for minimum similarity with rate limiting
                 embeddings_filter = EmbeddingsFilter(
                     embeddings=self.embeddings_model,
                     similarity_threshold=min_similarity
@@ -222,10 +262,18 @@ class EnhancedSmartResponseGenerator:
                     base_compressor=embeddings_filter
                 )
                 
-                docs = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: filtered_retriever.get_relevant_documents(query)
-                )
+                # Apply rate limiting to the fallback retrieval
+                async def rate_limited_retrieval():
+                    await embeddings_limiter.acquire()
+                    try:
+                        return await asyncio.get_event_loop().run_in_executor(
+                            None,
+                            lambda: filtered_retriever.get_relevant_documents(query)
+                        )
+                    finally:
+                        embeddings_limiter.release()
+                
+                docs = await rate_limited_retrieval()
                 
                 # Since filtered_retriever doesn't provide scores, add default high scores
                 for doc in docs:
@@ -237,15 +285,22 @@ class EnhancedSmartResponseGenerator:
             except Exception as inner_e:
                 logger.error(f"Error with filtered retrieval: {str(inner_e)}")
                 
-                # Final fallback to basic retrieval
-                docs = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: retriever.get_relevant_documents(query)
-                )
+                # Final fallback to basic retrieval with rate limiting
+                async def rate_limited_basic_retrieval():
+                    await embeddings_limiter.acquire()
+                    try:
+                        return await asyncio.get_event_loop().run_in_executor(
+                            None,
+                            lambda: retriever.get_relevant_documents(query)
+                        )
+                    finally:
+                        embeddings_limiter.release()
+                
+                docs = await rate_limited_basic_retrieval()
                 
                 # Add default scores that will pass your threshold
                 for doc in docs:
-                    doc.metadata['similarity'] = 0.75  # Above your 0.65 threshold
+                    doc.metadata['similarity'] = 0.75  # Above your threshold
                     
                 logger.info(f"Fall back retrieval: {len(docs)} documents with default scores")
                 return docs
@@ -276,14 +331,25 @@ class EnhancedSmartResponseGenerator:
         attributions = []
         
         try:
-            # Get response embedding
-            response_embedding = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.embeddings_model.embed_query(response)
+            # Get response embedding with rate limiting
+            response_embedding = await rate_limited_call(
+                self.embeddings_model.embed_query,
+                embeddings_limiter,
+                response
             )
             
+            # For efficiency, batch document embeddings
+            doc_contents = [doc.page_content for doc in documents if hasattr(doc, 'page_content') and doc.page_content.strip()]
+            
+            # Skip processing if no valid documents
+            if not doc_contents:
+                return []
+                
+            # Use batched embeddings with rate limiting
+            doc_embeddings = await self._batch_embed_documents(doc_contents)
+            
             # Process each document for attribution
-            for doc in documents:
+            for i, doc in enumerate(documents):
                 # Skip empty or invalid documents
                 if not hasattr(doc, 'page_content') or not doc.page_content.strip():
                     continue
@@ -291,11 +357,16 @@ class EnhancedSmartResponseGenerator:
                 content = doc.page_content
                 metadata = doc.metadata or {}
                 
-                # Get document embedding for semantic similarity
-                doc_embedding = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self.embeddings_model.embed_query(content)
-                )
+                # Use the precomputed embedding
+                if i < len(doc_embeddings):
+                    doc_embedding = doc_embeddings[i]
+                else:
+                    # Fallback if index mismatch
+                    doc_embedding = await rate_limited_call(
+                        self.embeddings_model.embed_query,
+                        embeddings_limiter,
+                        content
+                    )
                 
                 # Calculate semantic similarity using cosine similarity
                 semantic_similarity = np.dot(response_embedding, doc_embedding)
@@ -373,6 +444,25 @@ class EnhancedSmartResponseGenerator:
                         )
                     )
             return fallback_attributions
+
+    async def _batch_embed_documents(self, texts, batch_size=20):
+        """Batch process document embeddings with rate limiting"""
+        if not texts:
+            return []
+        
+        # Process in batches to reduce API calls
+        all_embeddings = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i+batch_size]
+            batch_embeddings = await rate_limited_call(
+                self.embeddings_model.embed_documents,
+                embeddings_limiter,
+                batch
+            )
+            all_embeddings.extend(batch_embeddings)
+        
+        return all_embeddings
 
     def _calculate_content_overlap(self, text1: str, text2: str) -> float:
         """Calculate content overlap using improved word-based similarity
