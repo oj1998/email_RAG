@@ -677,11 +677,11 @@ async def process_document_query(
     
             # Check for comparison queries (which we'll now route to variance analysis)
             is_comparison = False
-            if hasattr(classification, 'suggested_format') and classification.suggested_format:
-                is_comparison = classification.suggested_format.get("is_comparison", False)
+            #if hasattr(classification, 'suggested_format') and classification.suggested_format:
+                #is_comparison = classification.suggested_format.get("is_comparison", False)
                 # Add detailed logging
-                logger.info(f"Classification details - Category: {classification.category}, is_comparison: {is_comparison}")
-                logger.info(f"Full suggested_format: {classification.suggested_format}")
+                #logger.info(f"Classification details - Category: {classification.category}, is_comparison: {is_comparison}")
+                #logger.info(f"Full suggested_format: {classification.suggested_format}")
             
             # Log the final routing decision with reasoning
             variance_match = is_variance_analysis_query(request.query)
