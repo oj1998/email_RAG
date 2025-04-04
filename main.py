@@ -572,13 +572,28 @@ async def process_document(request: ProcessRequest):
                 # Add to vector store with explicit error handling
                 try:
                     vector_store.add_documents(texts)
+                    
+                    # Add this new block right here
+                    try:
+                        async with pool.acquire() as conn:
+                            # Update custom_id to match document_id in metadata
+                            updated = await conn.execute("""
+                                UPDATE langchain_pg_embedding
+                                SET custom_id = cmetadata->>'document_id'
+                                WHERE cmetadata->>'document_id' = $1
+                            """, request.document_id)
+                            logger.info(f"Updated {updated} embedding records with document_id as custom_id")
+                    except Exception as e:
+                        logger.warning(f"Failed to update custom_ids in database: {str(e)}")
+                    # End of new block
+                    
                 except Exception as e:
                     logger.error(f"Failed to add documents to vector store: {str(e)}")
                     raise HTTPException(
                         status_code=500,
                         detail=f"Failed to store document vectors: {str(e)}"
                     )
-
+                
                 # Log success
                 logger.info(f"Successfully processed document {request.document_id} with {len(texts)} chunks")
 
