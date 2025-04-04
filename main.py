@@ -145,7 +145,8 @@ async def lifespan(app: FastAPI):
         vector_store = PGVector(
             collection_name="document_embeddings",
             connection_string=os.getenv('POSTGRES_CONNECTION_STRING'),
-            embedding_function=OpenAIEmbeddings()
+            embedding_function=OpenAIEmbeddings(),
+            collection_metadata={"metadata_field_for_custom_id": "document_id"}
         )
         logger.info("Document vector store initialized successfully")
         
