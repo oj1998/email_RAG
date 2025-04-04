@@ -31,19 +31,9 @@ class QueryRequest(BaseModel):
 
 # Function to check if a query is about variance analysis
 def is_variance_analysis_query(question: str) -> bool:
-    """Detect if a query is asking for differences between sources on the same topic."""
-    variance_patterns = [
-        r"(differences|discrepancies|variations|conflicts) (between|among|in) sources",
-        r"(how|do) (sources|documents|references) (differ|vary|disagree)",
-        r"conflicting information (about|on|regarding)",
-        r"(which|what) source (is|seems) (more|most) (accurate|reliable|up-to-date)",
-        r"inconsistencies (in|between) (documentation|sources|references)",
-        r"source variance",
-        r"document (variance|discrepancy)",
-        r"which (document|source) to (trust|believe|follow)",
-        r"contradictions in (documentation|sources|references)"
-    ]
-    return any(re.search(pattern, question.lower()) for pattern in variance_patterns)
+    """Detect if a query is explicitly asking about differences between sources."""
+    strict_pattern = r"(differences|discrepancies|variations|conflicts) between (sources|documents|references)"
+    return bool(re.search(strict_pattern, question.lower()))
 
 # Main processing function for variance analysis queries
 async def process_variance_query(
