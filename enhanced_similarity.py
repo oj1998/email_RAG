@@ -305,13 +305,20 @@ class EnhancedSmartResponseGenerator:
                 embedding = None
                 
                 try:
-                    # If vector store has a method to get the embedding for a document_id, use it
-                    # This is a placeholder - you'll need to implement this based on your DB structure
+                    # First try with document_id as a string
                     async with pool.acquire() as conn:
                         result = await conn.fetchrow(
-                            "SELECT embedding FROM langchain_pg_embedding WHERE custom_id = $1 OR uuid = $1",
+                            "SELECT embedding FROM langchain_pg_embedding WHERE custom_id = $1",
                             document_id
                         )
+                        
+                        # If not found, try with uuid column (with proper type casting)
+                        if not result:
+                            result = await conn.fetchrow(
+                                "SELECT embedding FROM langchain_pg_embedding WHERE uuid::text = $1",
+                                document_id
+                            )
+                            
                         if result:
                             embedding = result['embedding']
                             logger.info(f"Retrieved embedding from database for document {document_id}")
