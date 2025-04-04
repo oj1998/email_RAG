@@ -275,11 +275,9 @@ class EnhancedSmartResponseGenerator:
         documents: List[Document],
         classification: QuestionType
     ) -> List[SourceAttribution]:
-        """Extract source attributions with improved batching"""
-        # Start timing for performance monitoring
+        """Extract source attributions without re-embedding documents"""
         start_time = datetime.utcnow()
         
-        # No documents means no attributions
         if not documents:
             return []
             
@@ -292,42 +290,47 @@ class EnhancedSmartResponseGenerator:
                 response
             )
             
-            # Extract all document contents first to enable batching
-            doc_contents = []
-            valid_docs = []
-            
+            # Instead of re-embedding, directly use each document
             for doc in documents:
-                if hasattr(doc, 'page_content') and doc.page_content.strip():
-                    doc_contents.append(doc.page_content)
-                    valid_docs.append(doc)
-            
-            # Skip processing if no valid documents
-            if not doc_contents:
-                return []
-                
-            # Use batched embeddings
-            logger.info(f"Batching embeddings for {len(doc_contents)} documents")
-            doc_embeddings = await self._batch_embed_documents(doc_contents)
-            
-            # Process each document for attribution
-            for i, doc in enumerate(valid_docs):
-                if i >= len(doc_embeddings):
+                if not hasattr(doc, 'page_content') or not doc.page_content.strip():
                     continue
-                    
+                
                 content = doc.page_content
                 metadata = doc.metadata or {}
+                document_id = metadata.get('document_id', metadata.get('source_id'))
                 
-                # Use the precomputed embedding
-                doc_embedding = doc_embeddings[i]
+                # Get the embedding from the database instead of generating a new one
+                embedding = None
+                
+                try:
+                    # If vector store has a method to get the embedding for a document_id, use it
+                    # This is a placeholder - you'll need to implement this based on your DB structure
+                    async with pool.acquire() as conn:
+                        result = await conn.fetchrow(
+                            "SELECT embedding FROM langchain_pg_embedding WHERE custom_id = $1 OR uuid = $1",
+                            document_id
+                        )
+                        if result:
+                            embedding = result['embedding']
+                            logger.info(f"Retrieved embedding from database for document {document_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to get embedding from database: {str(e)}")
+                
+                # Fallback to generating a new embedding if we couldn't get it from DB
+                if embedding is None:
+                    embedding = await asyncio.to_thread(
+                        self.embeddings_model.embed_query,
+                        content
+                    )
+                    logger.info(f"Generated new embedding for document {document_id} (fallback)")
                 
                 # Calculate semantic similarity using cosine similarity
-                semantic_similarity = np.dot(response_embedding, doc_embedding)
+                semantic_similarity = np.dot(response_embedding, embedding)
                 semantic_similarity = (semantic_similarity + 1) / 2  # Convert to 0-1 range
                 
-                # Calculate simple content overlap for a cross-check
+                # Continue with the rest of your existing code...
                 content_overlap = self._calculate_content_overlap(response, content)
                 
-                # Compute weighted final confidence
                 semantic_weight = 0.7
                 overlap_weight = 0.3
                 
@@ -336,15 +339,13 @@ class EnhancedSmartResponseGenerator:
                     overlap_weight * content_overlap
                 )
                 
-                # Skip if below threshold
                 if confidence < self.min_confidence:
                     continue
                     
-                # Create attribution with enhanced details
                 attributions.append(
                     EnhancedSourceAttribution(
                         content=content[:200] + "..." if len(content) > 200 else content,
-                        source_id=metadata.get('document_id', metadata.get('source_id')),
+                        source_id=document_id,
                         page_number=metadata.get('page'),
                         confidence=round(float(confidence), 4),
                         semantic_similarity=round(float(semantic_similarity), 4),
@@ -354,10 +355,10 @@ class EnhancedSmartResponseGenerator:
                     )
                 )
                 
-            # Sort by confidence and limit results
+            # Sort by confidence and return
             attributions = sorted(attributions, key=lambda x: x.confidence, reverse=True)
             
-            # Calculate processing time
+            # Calculate processing time for logging
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
             logger.info(f"Attribution extraction took {processing_time:.2f}ms")
             
@@ -365,21 +366,7 @@ class EnhancedSmartResponseGenerator:
             
         except Exception as e:
             logger.error(f"Error in attribution extraction: {str(e)}")
-            
-            # Simple fallback if extraction fails
-            fallback_attributions = []
-            for doc in documents[:3]:  # Limit to first 3 docs to reduce processing
-                if hasattr(doc, 'metadata') and hasattr(doc, 'page_content'):
-                    metadata = doc.metadata or {}
-                    fallback_attributions.append(
-                        SourceAttribution(
-                            content=doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
-                            source_id=metadata.get('document_id', metadata.get('source_id')),
-                            page_number=metadata.get('page'),
-                            confidence=0.7
-                        )
-                    )
-            return fallback_attributions
+            return []  # Return empty list on failure
 
     def _calculate_content_overlap(self, text1: str, text2: str) -> float:
         """Calculate content overlap using improved word-based similarity
