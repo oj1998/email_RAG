@@ -13,7 +13,7 @@ import logging
 import numpy as np
 import asyncio
 from datetime import datetime
-from bubble_backend import pool  # Add this import at the top of the file
+
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +274,8 @@ class EnhancedSmartResponseGenerator:
         self,
         response: str,
         documents: List[Document],
-        classification: QuestionType
+        classification: QuestionType,
+        pool=None
     ) -> List[SourceAttribution]:
         """Extract source attributions without re-embedding documents"""
         start_time = datetime.utcnow()
