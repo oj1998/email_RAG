@@ -920,7 +920,8 @@ async def process_document_query(
                 source_attributions = await enhanced_source_handler._extract_attributions(
                     response_content,
                     source_documents,
-                    classification
+                    classification,
+                    pool
                 )
     
             # Calculate processing time
