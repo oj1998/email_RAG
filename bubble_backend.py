@@ -679,10 +679,16 @@ async def process_document_query(
             is_comparison = False
             if hasattr(classification, 'suggested_format') and classification.suggested_format:
                 is_comparison = classification.suggested_format.get("is_comparison", False)
+                # Add detailed logging
+                logger.info(f"Classification details - Category: {classification.category}, is_comparison: {is_comparison}")
+                logger.info(f"Full suggested_format: {classification.suggested_format}")
             
-            # Route any comparison or variance queries to our new system
-            if is_comparison or classification.category == "COMPARISON" or is_variance_analysis_query(request.query):
-                logger.info(f"Routing to variance analysis for query: {request.query}")
+            # Log the final routing decision with reasoning
+            variance_match = is_variance_analysis_query(request.query)
+            logger.info(f"Routing decision components - is_comparison: {is_comparison}, category: {classification.category}, variance_match: {variance_match}")
+            
+            if is_comparison or classification.category == "COMPARISON" or variance_match:
+                logger.info(f"Routing to variance analysis because: is_comparison={is_comparison}, category={classification.category}, variance_match={variance_match}")
                 return await process_variance_query(
                     request=request,
                     classification=classification,
