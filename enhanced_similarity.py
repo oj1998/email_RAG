@@ -13,6 +13,7 @@ import logging
 import numpy as np
 import asyncio
 from datetime import datetime
+from bubble_backend import pool  # Add this import at the top of the file
 
 logger = logging.getLogger(__name__)
 
