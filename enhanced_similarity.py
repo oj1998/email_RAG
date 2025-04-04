@@ -285,6 +285,17 @@ class EnhancedSmartResponseGenerator:
             
         attributions = []
         
+        # Add this at the beginning to inspect a few rows
+        try:
+            async with pool.acquire() as conn:
+                # Check what columns and data actually exist in the table
+                sample_rows = await conn.fetch(
+                    "SELECT uuid, custom_id, CASE WHEN embedding IS NULL THEN 'NULL' ELSE 'NOT NULL' END AS has_embedding FROM langchain_pg_embedding LIMIT 3"
+                )
+                logger.info(f"Sample rows from langchain_pg_embedding: {sample_rows}")
+        except Exception as e:
+            logger.warning(f"Failed to inspect database: {str(e)}")
+        
         try:
             # Get response embedding only once
             response_embedding = await asyncio.to_thread(
@@ -305,23 +316,36 @@ class EnhancedSmartResponseGenerator:
                 embedding = None
                 
                 try:
-                    # First try with document_id as a string
+                    # Log the document ID we're trying to look up
+                    logger.info(f"Attempting to retrieve embedding for document ID: {document_id}")
+                    
                     async with pool.acquire() as conn:
+                        # Try custom_id first
                         result = await conn.fetchrow(
                             "SELECT embedding FROM langchain_pg_embedding WHERE custom_id = $1",
                             document_id
                         )
-                        
-                        # If not found, try with uuid column (with proper type casting)
-                        if not result:
+                        if result:
+                            logger.info(f"Found embedding via custom_id match for {document_id}")
+                        else:
+                            logger.info(f"No match found for custom_id={document_id}, trying uuid")
+                            
+                            # Try uuid column
                             result = await conn.fetchrow(
                                 "SELECT embedding FROM langchain_pg_embedding WHERE uuid::text = $1",
                                 document_id
                             )
-                            
+                            if result:
+                                logger.info(f"Found embedding via uuid match for {document_id}")
+                            else:
+                                logger.info(f"No matching embedding found in database for {document_id}")
+                        
                         if result:
                             embedding = result['embedding']
                             logger.info(f"Retrieved embedding from database for document {document_id}")
+                            
+                            # Log the type and size to verify it's usable
+                            logger.info(f"Embedding type: {type(embedding)}, length: {len(embedding) if hasattr(embedding, '__len__') else 'unknown'}")
                 except Exception as e:
                     logger.warning(f"Failed to get embedding from database: {str(e)}")
                 
