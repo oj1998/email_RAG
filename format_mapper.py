@@ -397,9 +397,11 @@ class FormatMapper:
             
             # Replace in original content using regex with specific section name
             pattern = fr"((?:^|\n)(?:#{1,2}\s*{section}|\*\*{section}\*\*|{section}:).*?)((?=\n#{1,2}|\n\*\*|\n\w+:|\Z))"
-            replacement = fr"\1{numbered_content}\2"
-            content = re.sub(pattern, replacement, content, flags=re.DOTALL | re.IGNORECASE)
-        
+            # Use a function for replacement to avoid backref issues
+            content = re.sub(pattern, 
+                            lambda m: m.group(1) + numbered_content + m.group(2), 
+                            content, 
+                            flags=re.DOTALL | re.IGNORECASE)
         return content
     
     def _highlight_cautions(self, content: str) -> str:
