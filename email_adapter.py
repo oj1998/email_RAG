@@ -149,6 +149,11 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             filter_options = {k: v for k, v in email_filters.items() if v is not None}
         elif context:
             filter_options.update(extract_time_filters(context))
+
+        if 'subject_contains' in filter_options and filter_options['subject_contains'] == 'meeting':
+            logger.info("FOUND MEETING FILTER - Investigating source")
+            import traceback
+            logger.info(f"Filter stack trace: {traceback.format_stack()}")
         
         # Detect intent using existing intent detector
         intent_detector = EmailIntentDetector(use_embeddings=False, use_llm=True)
