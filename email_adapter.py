@@ -143,12 +143,13 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
         # Get QA system
         qa_system = await get_email_qa_system()
         
-        # Handle filters
+        
         filter_options = {}
-        if email_filters:
-            filter_options = {k: v for k, v in email_filters.items() if v is not None}
-        elif context:
-            filter_options.update(extract_time_filters(context))
+        logger.info("FILTERING DISABLED: Ignoring all email filters for testing")
+        #if email_filters:
+        #    filter_options = {k: v for k, v in email_filters.items() if v is not None}
+        #elif context:
+        #    filter_options.update(extract_time_filters(context))
 
         if 'subject_contains' in filter_options and filter_options['subject_contains'] == 'meeting':
             logger.info("FOUND MEETING FILTER - Investigating source")
