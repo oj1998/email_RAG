@@ -315,6 +315,7 @@ class EnhancedSmartResponseGenerator:
                 # Get the embedding from the database instead of generating a new one
                 embedding = None
                 
+                # After modification
                 try:
                     # Log the document ID we're trying to look up
                     logger.info(f"Attempting to retrieve embedding for document ID: {document_id}")
@@ -346,6 +347,21 @@ class EnhancedSmartResponseGenerator:
                             
                             # Log the type and size to verify it's usable
                             logger.info(f"Embedding type: {type(embedding)}, length: {len(embedding) if hasattr(embedding, '__len__') else 'unknown'}")
+                            
+                            # Convert string embedding to numerical array if needed
+                            if isinstance(embedding, str):
+                                try:
+                                    # If embedding is a string representation of a list
+                                    if embedding.startswith('[') and embedding.endswith(']'):
+                                        import ast
+                                        embedding = ast.literal_eval(embedding)
+                                    # If embedding is a comma-separated string
+                                    else:
+                                        embedding = [float(x) for x in embedding.split(',')]
+                                    logger.info(f"Successfully converted string embedding to array with length {len(embedding)}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to convert string embedding to array: {str(e)}")
+                                    embedding = None
                 except Exception as e:
                     logger.warning(f"Failed to get embedding from database: {str(e)}")
                 
