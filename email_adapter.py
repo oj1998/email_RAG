@@ -23,6 +23,8 @@ from email_output.timeline_formatter import TimelineFormatter, TimelineFormat
 
 from enhanced_supabase import EnhancedSupabaseVectorStore
 
+RELEVANCE_THRESHOLD = 0.25
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -184,6 +186,18 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
         )
         retrieval_time = (datetime.now() - retrieval_start_time).total_seconds()
         logger.info(f"Email retrieval completed in {retrieval_time:.2f} seconds, found {len(relevant_emails)} emails")
+
+
+        filtered_emails = []
+        for email in relevant_emails:
+            relevance_score = email.metadata.get("relevance_score", 0)
+            if relevance_score >= RELEVANCE_THRESHOLD:
+                filtered_emails.append(email)
+            else:
+                logger.info(f"Filtering out email with low relevance score ({relevance_score:.2f}): {email.metadata.get('subject', 'No subject')}")
+        
+        logger.info(f"After relevance filtering: {len(filtered_emails)} of {len(relevant_emails)} emails retained")
+        relevant_emails = filtered_emails  # Replace with filtered list
         
         # Generate a brief summary for each email using the LLM
         summarized_emails = []
