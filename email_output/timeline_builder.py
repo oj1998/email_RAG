@@ -40,10 +40,7 @@ class TimelineBuilder:
         logger.info(f"Using anchor email: '{anchor_email.get('subject', 'No subject')}' from {anchor_email.get('sender', 'Unknown')}")
         logger.info(f"With {len(related_emails)} related emails")
         
-        # Combine all emails
-        all_emails = [anchor_email] + related_emails
-
-
+        # Log relevance scores of all emails
         logger.info("========== EMAIL RELEVANCE SCORES ==========")
         logger.info(f"Anchor email: '{anchor_email.get('subject')}' - Score: {anchor_email.get('confidence', 0):.4f}")
         
@@ -57,6 +54,28 @@ class TimelineBuilder:
         # Log how many emails have zero or near-zero relevance
         low_relevance_count = sum(1 for email in all_emails if email.get('confidence', 0) < 0.1)
         logger.info(f"Number of emails with relevance score < 0.1: {low_relevance_count} out of {len(all_emails)}")
+        
+        # Filter out emails with low confidence scores
+        CONFIDENCE_THRESHOLD = 0.1  # Adjust as needed
+        
+        # Always keep the anchor email (the most relevant one)
+        filtered_emails = [anchor_email]
+        
+        # Only add related emails if they meet the confidence threshold
+        filtered_related = [
+            email for email in related_emails 
+            if email.get('confidence', 0) >= CONFIDENCE_THRESHOLD
+        ]
+        
+        # Add the filtered related emails to our list
+        filtered_emails.extend(filtered_related)
+        
+        # Log filtering results
+        logger.info(f"Filtered out {len(related_emails) - len(filtered_related)} emails with confidence < {CONFIDENCE_THRESHOLD}")
+        logger.info(f"Keeping {len(filtered_emails)} emails total (1 anchor + {len(filtered_related)} related)")
+        
+        # Use filtered emails for the rest of the function
+        all_emails = filtered_emails
         
         # Sort by date
         logger.info("Sorting emails by date")
