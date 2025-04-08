@@ -9,16 +9,7 @@ from langchain_openai import ChatOpenAI
 logger = logging.getLogger(__name__)
 
 class TimelineBuilder:
-    """Builds email timelines around anchor emails with thematic categorization of insights"""
-    
-    # Define the theme categories we want to use
-    INSIGHT_THEMES = {
-        "DECISION_CHANGE": "Decision Changes",
-        "CRITICAL_INFO": "Critical Information",
-        "RISK_IDENTIFIED": "Risks Identified",
-        "PROBLEM_SOLUTION": "Problem Solutions",
-        "PROJECT_MILESTONE": "Project Milestones"
-    }
+    """Builds email timelines around anchor emails"""
     
     def __init__(self, llm=None):
         """Initialize with optional language model"""
@@ -108,11 +99,6 @@ class TimelineBuilder:
         logger.info("Finding turning points in the discussion")
         turning_points = await self._identify_turning_points(timeline_events, query)
         
-        # NEW: Categorize turning points by theme
-        logger.info("Categorizing turning points by theme")
-        categorized_insights = await self._categorize_turning_points(turning_points, timeline_events)
-        logger.info(f"Categorized turning points into {len(categorized_insights)} themes")
-        
         # Build timeline data structure
         date_range = {
             "start": sorted_emails[0].get('date') if sorted_emails else None,
@@ -153,9 +139,9 @@ class TimelineBuilder:
         ] if contributors else ["Unknown"]
         
         try:
-            summary_chain = summary_prompt | self.llm 
+            summary_chain = summary_prompt | self.llm | StrOutputParser()
             
-            summary_response = await summary_chain.ainvoke({
+            summary = await summary_chain.ainvoke({
                 "query": query,
                 "start_date": date_range["start"] or "unknown",
                 "end_date": date_range["end"] or "unknown",
@@ -164,13 +150,6 @@ class TimelineBuilder:
                 "turning_points": "; ".join(turning_point_descriptions) or "No major turning points identified"
             })
             
-            # Extract summary from response
-            summary = ""
-            if hasattr(summary_response, 'content'):
-                summary = summary_response.content
-            else:
-                summary = str(summary_response)
-                
             logger.info(f"Generated summary of length {len(summary)}")
             logger.info(f"Summary preview: {summary[:100]}...")
         except Exception as e:
@@ -182,14 +161,11 @@ class TimelineBuilder:
             "events": timeline_events,
             "contributors": contributors,
             "turning_points": turning_points,
-            "categorized_insights": categorized_insights,  # NEW: Add the categorized insights
             "query": query,
             "timeframe": timeframe,
             "email_count": len(sorted_emails),
             "date_range": date_range,
-            "summary": summary,
-            # Add the theme definitions for the frontend to use
-            "theme_definitions": {theme_key: theme_name for theme_key, theme_name in self.INSIGHT_THEMES.items()}
+            "summary": summary  # Add the generated summary to the timeline data
         }
         
         # Log detailed timeline data for debugging
@@ -214,14 +190,6 @@ class TimelineBuilder:
             event_info = f"{timeline_events[event_idx]['date']} - {timeline_events[event_idx]['subject']}" if 0 <= event_idx < len(timeline_events) else "Unknown"
             logger.info(f"  Point {i+1}: {event_info}")
             logger.info(f"    Description: {point.get('description', 'No description')}")
-            logger.info(f"    Theme: {point.get('theme', 'Uncategorized')}")
-        
-        # Log categorized insights
-        logger.info(f"Categorized insights:")
-        for theme, insights in categorized_insights.items():
-            logger.info(f"  Theme: {theme} ({self.INSIGHT_THEMES.get(theme, 'Unknown')}) - {len(insights)} insights")
-            for insight in insights:
-                logger.info(f"    - {insight.get('description', 'No description')[:100]}...")
         
         # Log contributors
         logger.info(f"Contributors ({len(contributors)}):")
@@ -443,7 +411,7 @@ class TimelineBuilder:
         events: List[Dict[str, Any]],
         query: str
     ) -> List[Dict[str, Any]]:
-        """Identify turning points and categorize them by theme"""
+        """Identify turning points or significant changes in the discussion"""
         logger.info(f"Identifying turning points in {len(events)} events")
         
         start_time = datetime.now()
@@ -466,12 +434,8 @@ class TimelineBuilder:
             
             logger.info(f"Prepared events text of length {len(events_text)} for turning point analysis")
             
-            # Define theme categories for the prompt
-            theme_categories = ", ".join([
-                f"{key} ({value})" for key, value in self.INSIGHT_THEMES.items()
-            ])
-            
-            # Use LLM to identify and categorize turning points
+            # Use LLM to identify turning points
+            # Use LLM to identify turning points with better content
             prompt = PromptTemplate.from_template("""
             Analyze this sequence of email events related to the query: "{query}"
             
@@ -487,7 +451,6 @@ class TimelineBuilder:
             For each turning point, provide:
             1. The event number (as an integer)
             2. A VERY SPECIFIC description of why it's significant (3-4 sentences)
-            3. A theme category from this list: {theme_categories}
             
             Your description should contain SPECIFIC DETAILS about what made this email important:
             - What specific decision was made?
@@ -500,18 +463,16 @@ class TimelineBuilder:
             FORMAT INSTRUCTIONS: Return your response as a JSON array with objects containing these keys: 
             - "event_index" (integer, starting from 1)
             - "description" (string with specific details)
-            - "theme" (string matching one of the theme categories)
             
             IMPORTANT: Make sure you identify at least one turning point with a DETAILED, SPECIFIC description.
             """)
             
-            logger.info("Sending to LLM for turning point identification and categorization")
+            logger.info("Sending to LLM for turning point identification")
             chain = prompt | self.llm
             
             response = await chain.ainvoke({
                 "query": query,
-                "events_text": events_text,
-                "theme_categories": theme_categories
+                "events_text": events_text
             })
             
             # Parse the response
@@ -544,7 +505,7 @@ class TimelineBuilder:
             else:
                 logger.warning("No JSON array found in LLM turning point response")
             
-            # Process turning points - convert event numbers to indices and ensure themes
+            # Process turning points - convert event numbers to indices
             turning_points = []
             
             # If we have turning points from LLM
@@ -554,41 +515,15 @@ class TimelineBuilder:
                         # Parse event index (adjust from 1-indexed to 0-indexed)
                         event_index = int(point["event_index"]) - 1
                         
-                        # Ensure the theme is valid, defaulting to CRITICAL_INFO if not
-                        theme = point.get("theme", "")
-                        # If the theme isn't one of our defined themes, try to map it to the closest one
-                        if theme not in self.INSIGHT_THEMES:
-                            # Simple mapping logic - check if any theme key words appear in the theme string
-                            theme_mapping = {
-                                "decision": "DECISION_CHANGE",
-                                "change": "DECISION_CHANGE",
-                                "critical": "CRITICAL_INFO",
-                                "information": "CRITICAL_INFO",
-                                "risk": "RISK_IDENTIFIED",
-                                "issue": "RISK_IDENTIFIED",
-                                "problem": "PROBLEM_SOLUTION",
-                                "solution": "PROBLEM_SOLUTION",
-                                "milestone": "PROJECT_MILESTONE",
-                                "achievement": "PROJECT_MILESTONE"
-                            }
-                            for keyword, mapped_theme in theme_mapping.items():
-                                if keyword.lower() in theme.lower():
-                                    theme = mapped_theme
-                                    break
-                            else:
-                                # If no matching keyword found, default to CRITICAL_INFO
-                                theme = "CRITICAL_INFO"
-                        
                         if 0 <= event_index < len(events):
                             turning_point = {
                                 "event_index": event_index,
                                 "date": events[event_index]["date"],
                                 "sender": events[event_index]["sender"],
-                                "description": point.get("description", "Significant change in discussion"),
-                                "theme": theme
+                                "description": point.get("description", "Significant change in discussion")
                             }
                             turning_points.append(turning_point)
-                            logger.info(f"Identified turning point at event {event_index+1}, theme: {theme}")
+                            logger.info(f"Identified turning point at event {event_index+1}: {turning_point['description']}")
             
             # If we didn't get any turning points from the LLM, create a fallback turning point
             if not turning_points and events:
@@ -619,41 +554,27 @@ class TimelineBuilder:
                 if ranked_events:
                     best_index, _ = ranked_events[0]
                     
-                    # Determine a fallback theme based on the subject
-                    subject = events[best_index]['subject'].lower()
-                    fallback_theme = "CRITICAL_INFO"  # Default
-                    if any(kw in subject for kw in ['decision', 'approve', 'agreement']):
-                        fallback_theme = "DECISION_CHANGE"
-                    elif any(kw in subject for kw in ['risk', 'issue', 'concern', 'warning']):
-                        fallback_theme = "RISK_IDENTIFIED"
-                    elif any(kw in subject for kw in ['solution', 'resolve', 'fix']):
-                        fallback_theme = "PROBLEM_SOLUTION"
-                    elif any(kw in subject for kw in ['milestone', 'complete', 'achievement']):
-                        fallback_theme = "PROJECT_MILESTONE"
-                    
                     # Create a fallback turning point
                     fallback_turning_point = {
                         "event_index": best_index,
                         "date": events[best_index]["date"],
                         "sender": events[best_index]["sender"],
-                        "description": f"This email from {events[best_index]['sender']} represents a key moment in the discussion about '{query}', introducing important information or changing the direction of the conversation.",
-                        "theme": fallback_theme
+                        "description": f"This email from {events[best_index]['sender']} represents a key moment in the discussion about '{query}', introducing important information or changing the direction of the conversation."
                     }
                     
                     turning_points.append(fallback_turning_point)
-                    logger.info(f"Created fallback turning point at event {best_index+1}: {events[best_index]['subject']}, theme: {fallback_theme}")
+                    logger.info(f"Created fallback turning point at event {best_index+1}: {events[best_index]['subject']}")
                 else:
                     # If all else fails, use the first event
                     fallback_turning_point = {
                         "event_index": 0,
                         "date": events[0]["date"],
                         "sender": events[0]["sender"],
-                        "description": f"This email begins the discussion about '{query}', setting the context for the conversation that follows.",
-                        "theme": "CRITICAL_INFO"
+                        "description": f"This email begins the discussion about '{query}', setting the context for the conversation that follows."
                     }
                     
                     turning_points.append(fallback_turning_point)
-                    logger.info("Created fallback turning point with first event, theme: CRITICAL_INFO")
+                    logger.info("Created fallback turning point with first event")
             
             # Log processing time
             processing_time = (datetime.now() - start_time).total_seconds()
@@ -670,56 +591,6 @@ class TimelineBuilder:
                     "event_index": 0,
                     "date": events[0]["date"],
                     "sender": events[0]["sender"],
-                    "description": f"This email begins the discussion about '{query}'.",
-                    "theme": "CRITICAL_INFO"
+                    "description": f"This email begins the discussion about '{query}'."
                 }]
             return []
-            
-    async def _categorize_turning_points(
-        self,
-        turning_points: List[Dict[str, Any]],
-        events: List[Dict[str, Any]]
-    ) -> Dict[str, List[Dict[str, Any]]]:
-        """Group turning points by their thematic categories"""
-        categorized_insights = {}
-        
-        # Initialize categories with empty lists
-        for theme_key in self.INSIGHT_THEMES.keys():
-            categorized_insights[theme_key] = []
-        
-        # Group turning points by their themes
-        for tp in turning_points:
-            theme = tp.get("theme", "CRITICAL_INFO")
-            if theme in categorized_insights:
-                # Add the turning point to its category
-                insight = {
-                    "event_index": tp["event_index"],
-                    "date": tp["date"],
-                    "sender": tp["sender"],
-                    "description": tp["description"]
-                }
-                categorized_insights[theme].append(insight)
-            else:
-                # If the theme is not in our predefined categories, add it to CRITICAL_INFO
-                categorized_insights["CRITICAL_INFO"].append({
-                    "event_index": tp["event_index"],
-                    "date": tp["date"],
-                    "sender": tp["sender"],
-                    "description": tp["description"]
-                })
-        
-        # Remove empty categories
-        categorized_insights = {k: v for k, v in categorized_insights.items() if v}
-        
-        # If no insights were categorized (empty dict), create a fallback
-        if not categorized_insights and turning_points:
-            categorized_insights["CRITICAL_INFO"] = [
-                {
-                    "event_index": tp["event_index"],
-                    "date": tp["date"],
-                    "sender": tp["sender"],
-                    "description": tp["description"]
-                } for tp in turning_points
-            ]
-            
-        return categorized_insights
