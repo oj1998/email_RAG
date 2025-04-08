@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-import loggings
+import logging
 import json
 import re
 from langchain.prompts import PromptTemplate
