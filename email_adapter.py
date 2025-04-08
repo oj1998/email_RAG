@@ -188,17 +188,29 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
         logger.info(f"Email retrieval completed in {retrieval_time:.2f} seconds, found {len(relevant_emails)} emails")
 
         for i, email in enumerate(relevant_emails):
-            relevance_score = email.metadata.get("relevance_score", 0)
-            logger.info(f"Email #{i+1}: '{email.metadata.get('subject', 'No subject')}' - Score: {relevance_score:.2f}")
+            if hasattr(email, 'metadata'):
+                relevance_score = email.metadata.get("relevance_score", 0)
+                logger.info(f"Email #{i+1}: '{email.metadata.get('subject', 'No subject')}' FROM {email.metadata.get('sender', 'unknown')} - Score: {relevance_score:.4f}")
+            else:
+                logger.info(f"Email #{i+1}: No metadata available")
 
 
         filtered_emails = []
         for email in relevant_emails:
-            relevance_score = email.metadata.get("relevance_score", 0)
-            if relevance_score >= RELEVANCE_THRESHOLD:
-                filtered_emails.append(email)
+            if hasattr(email, 'metadata'):
+                relevance_score = email.metadata.get("relevance_score", 0)
+                subject = email.metadata.get('subject', 'No subject')
+                sender = email.metadata.get('sender', 'unknown')
+                
+                if relevance_score >= RELEVANCE_THRESHOLD:
+                    filtered_emails.append(email)
+                    logger.info(f"KEEPING email: '{subject}' FROM {sender} - Score: {relevance_score:.4f}")
+                else:
+                    logger.info(f"FILTERING OUT email: '{subject}' FROM {sender} - Score: {relevance_score:.4f}")
             else:
-                logger.info(f"Filtering out email with low relevance score ({relevance_score:.2f}): {email.metadata.get('subject', 'No subject')}")
+                # If no metadata, default to keeping
+                filtered_emails.append(email)
+                logger.info("KEEPING email with no metadata")
         
         logger.info(f"After relevance filtering: {len(filtered_emails)} of {len(relevant_emails)} emails retained")
         relevant_emails = filtered_emails  # Replace with filtered list
