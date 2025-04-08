@@ -104,6 +104,21 @@ class TimelineBuilder:
             "start": sorted_emails[0].get('date') if sorted_emails else None,
             "end": sorted_emails[-1].get('date') if sorted_emails else None
         }
+
+        # Find turning points in the discussion
+        logger.info("Finding turning points in the discussion")
+        turning_points = await self._identify_turning_points(timeline_events, query)
+        
+        # Generate categories from events - ADD THIS SECTION
+        logger.info("Generating categories from events")
+        categories = await self._generate_categories(timeline_events, query, turning_points)
+        logger.info(f"Generated {len(categories)} categories")
+        
+        # Build timeline data structure
+        date_range = {
+            "start": sorted_emails[0].get('date') if sorted_emails else None,
+            "end": sorted_emails[-1].get('date') if sorted_emails else None
+        }
         
         # Generate a narrative summary of the timeline
         logger.info("Generating narrative summary of the timeline")
@@ -156,6 +171,8 @@ class TimelineBuilder:
             logger.error(f"Error generating summary: {str(e)}")
             summary = f"This timeline shows the evolution of communications related to '{query}' over time, involving {len(sorted_emails)} emails from {len(contributors)} contributors."
             logger.info(f"Using fallback summary: {summary}")
+
+        
         
         timeline_data = {
             "events": timeline_events,
@@ -165,7 +182,9 @@ class TimelineBuilder:
             "timeframe": timeframe,
             "email_count": len(sorted_emails),
             "date_range": date_range,
-            "summary": summary  # Add the generated summary to the timeline data
+            "summary": summary,
+            "categories": categories  # ADD THIS LINE with proper indentation
+            # Add the generated summary to the timeline data
         }
         
         # Log detailed timeline data for debugging
@@ -594,3 +613,119 @@ class TimelineBuilder:
                     "description": f"This email begins the discussion about '{query}'."
                 }]
             return []
+
+    async def _generate_categories(
+        self,
+        events: List[Dict[str, Any]],
+        query: str,
+        turning_points: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Generate predefined categories with content populated from events"""
+        logger.info(f"Generating categories from {len(events)} events")
+        
+        # Predefined categories
+        categories = [
+            {"type": "Critical Information", "items": []},
+            {"type": "Risks", "items": []},
+            {"type": "Decisions", "items": []}
+        ]
+        
+        try:
+            # Extract events content for LLM analysis
+            events_text = ""
+            for i, event in enumerate(events):
+                events_text += f"Event {i+1} ({event['date']}):\n"
+                events_text += f"From: {event['sender']}\n"
+                events_text += f"Subject: {event['subject']}\n"
+                events_text += f"Contribution: {event['contribution']}\n"
+                if event['key_points']:
+                    events_text += "Key points: " + ", ".join(event['key_points']) + "\n"
+                events_text += "\n"
+            
+            # Use LLM to categorize content
+            prompt = PromptTemplate.from_template("""
+            Analyze this sequence of email events related to the query: "{query}"
+            
+            {events_text}
+            
+            For each of the following categories, identify specific items from the emails that belong to that category:
+            
+            1. Critical Information: Important facts, essential data points, or critical context that stakeholders need to know.
+            2. Risks: Potential issues, concerns, delays, problems, or challenges mentioned in the emails.
+            3. Decisions: Choices made, agreements reached, conclusions drawn, or resolved matters.
+            
+            For each category, provide specific items extracted or derived from the emails. Each item should be a complete, standalone sentence 
+            that clearly states the information, risk, or decision.
+            
+            FORMAT INSTRUCTIONS: Return your response as a JSON object with these keys: 
+            - "critical_information" (array of strings)
+            - "risks" (array of strings)
+            - "decisions" (array of strings)
+            
+            Ensure each category has at least one item if possible.
+            """)
+            
+            logger.info("Sending to LLM for category identification")
+            chain = prompt | self.llm
+            
+            response = await chain.ainvoke({
+                "query": query,
+                "events_text": events_text
+            })
+            
+            # Extract JSON from response
+            if hasattr(response, 'content'):
+                response_text = response.content
+            else:
+                response_text = str(response)
+            
+            # Try to extract JSON object
+            import json
+            import re
+            
+            json_match = re.search(r'({.*})', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    matched_json = json_match.group(1)
+                    result = json.loads(matched_json)
+                    
+                    # Populate categories with items from result
+                    for category in categories:
+                        if category["type"] == "Critical Information" and "critical_information" in result:
+                            category["items"] = result["critical_information"]
+                        elif category["type"] == "Risks" and "risks" in result:
+                            category["items"] = result["risks"]
+                        elif category["type"] == "Decisions" and "decisions" in result:
+                            category["items"] = result["decisions"]
+                    
+                    logger.info(f"Successfully extracted categories from LLM response")
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parsing error: {str(e)}")
+            
+            # Add turning points to decisions if not already included
+            decisions_category = next((cat for cat in categories if cat["type"] == "Decisions"), None)
+            if decisions_category:
+                for point in turning_points:
+                    description = point.get("description", "")
+                    if description and not any(decision.lower() in description.lower() for decision in decisions_category["items"]):
+                        decisions_category["items"].append(description)
+            
+            # Add enhanced logging for categories
+            logger.info("========== DETAILED CATEGORY CONTENTS ==========")
+            for category in categories:
+                category_type = category['type']
+                items_count = len(category['items'])
+                logger.info(f"Category: {category_type} ({items_count} items)")
+                
+                if items_count > 0:
+                    for i, item in enumerate(category['items']):
+                        logger.info(f"  {i+1}. {item}")
+                else:
+                    logger.info("  No items found")
+            logger.info("===============================================")
+            
+            return categories
+        
+        except Exception as e:
+            logger.error(f"Error generating categories: {str(e)}", exc_info=True)
+            return categories
