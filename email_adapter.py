@@ -330,29 +330,6 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             logger.info(f"Contributors: {[c['name'] for c in timeline_data.get('contributors', [])]}")
             logger.info(f"Turning points: {len(timeline_data.get('turning_points', []))}")
             logger.info(f"Format style: {TimelineFormat.CHRONOLOGICAL.value}")
-
-            # Log categories information
-            if 'categories' in timeline_data:
-                logger.info("========== TIMELINE CATEGORIES ==========")
-                logger.info(f"Query: '{query}'")
-                logger.info(f"Found {len(timeline_data['categories'])} categories")
-                
-                for i, category in enumerate(timeline_data['categories']):
-                    logger.info(f"Category #{i+1}: {category.get('type', 'Unknown type')}")
-                    logger.info(f"  Items: {len(category.get('items', []))}")
-                    for j, item in enumerate(category.get('items', [])):
-                        logger.info(f"    - Item {j+1}: {item}")
-                
-                logger.info("========================================")
-            
-            # Add enhanced timeline categories logging
-            logger.info("========== TIMELINE OUTPUT WITH CATEGORIES ==========")
-            logger.info(f"Timeline contains {len(timeline_data.get('categories', []))} categorized information sections")
-            for category in timeline_data.get('categories', []):
-                category_type = category.get('type', 'Unknown')
-                item_count = len(category.get('items', []))
-                logger.info(f"Category '{category_type}' has {item_count} items")
-            logger.info("==================================================")
             
             # Log the actual formatted timeline content
             logger.info("========== FORMATTED TIMELINE ==========")
@@ -387,7 +364,7 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             logger.info(formatted_timeline)  # This is what will be shown in the UI
             logger.info("========== END FINAL TIMELINE UI OUTPUT ==========")
             
-            
+            # Return comprehensive response
             return {
                 "status": "success",
                 "answer": formatted_timeline,
@@ -397,8 +374,7 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
                     "query_type": "email_timeline",
                     "processing_time": (datetime.now() - start_time).total_seconds(),
                     "source_count": len(all_emails),
-                    "format": "timeline",
-                    "category_count": len(timeline_data.get('categories', [])) # Add this line
+                    "format": "timeline"
                 }
             }
         
