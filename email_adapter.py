@@ -242,6 +242,12 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             thread_emails = []
             if anchor_email.get('thread_id'):
                 thread_docs = qa_system.get_related_thread_emails(anchor_email)
+
+                logger.info(f"Processing {len(thread_docs)} thread emails for thread_id: {anchor_email.get('thread_id')}")
+                for i, doc in enumerate(thread_docs):
+                    if hasattr(doc, 'metadata'):
+                        relevance_score = doc.metadata.get("relevance_score", 0)
+                        logger.info(f"Thread email #{i+1}: '{doc.metadata.get('subject', 'No subject')}' - Score: {relevance_score:.2f}")
                 
                 # Convert to summarized format
                 for doc in thread_docs:
