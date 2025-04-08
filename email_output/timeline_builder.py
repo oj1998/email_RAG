@@ -804,15 +804,3 @@ class TimelineBuilder:
                 "items": [f"Timeline contains information about '{query}'"],
                 "source_event_indices": []
             }]
-                
-        except Exception as e:
-            logger.error(f"Error identifying turning points: {str(e)}", exc_info=True)
-            # Return a fallback turning point if possible
-            if events:
-                return [{
-                    "event_index": 0,
-                    "date": events[0]["date"],
-                    "sender": events[0]["sender"],
-                    "description": f"This email begins the discussion about '{query}'."
-                }]
-            return []
