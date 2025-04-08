@@ -363,6 +363,15 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
             logger.info("========== FINAL TIMELINE UI OUTPUT ==========")
             logger.info(formatted_timeline)  # This is what will be shown in the UI
             logger.info("========== END FINAL TIMELINE UI OUTPUT ==========")
+
+            if timeline_data.get('categories'):
+                logger.info("========== TIMELINE CATEGORIES OUTPUT ==========")
+                logger.info(f"Found {len(timeline_data['categories'])} categories in timeline data")
+                for category in timeline_data['categories']:
+                    logger.info(f"Category: {category['type']} - {len(category['items'])} items")
+                    for i, item in enumerate(category['items']):
+                        logger.info(f"  {i+1}. {item[:100]}..." if len(item) > 100 else f"  {i+1}. {item}")
+                logger.info("================================================")
             
             # Return comprehensive response
             return {
