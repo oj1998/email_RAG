@@ -5,6 +5,7 @@ import json
 import re
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
+from langchain.schema.output_parser import StrOutputParser
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +96,7 @@ class TimelineBuilder:
         contributors = self._identify_contributors(sorted_emails)
         logger.info(f"Identified {len(contributors)} contributors")
         
-        # Find turning points in the discussion
-        logger.info("Finding turning points in the discussion")
-        turning_points = await self._identify_turning_points(timeline_events, query)
-        
+      
         # Build timeline data structure
         date_range = {
             "start": sorted_emails[0].get('date') if sorted_emails else None,
@@ -214,6 +212,12 @@ class TimelineBuilder:
         logger.info(f"Contributors ({len(contributors)}):")
         for contributor in contributors:
             logger.info(f"  {contributor['name']}: {contributor['email_count']} emails ({contributor['participation_percentage']:.1f}%)")
+
+        logger.info(f"Categories ({len(timeline_data['categories'])}):")
+        for category in timeline_data['categories']:
+            logger.info(f"  {category['type']}: {len(category['items'])} items")
+            for i, item in enumerate(category['items']):
+                logger.info(f"    {i+1}. {item[:100]}..." if len(item) > 100 else f"    {i+1}. {item}")
         
         total_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"Timeline building completed in {total_time:.2f} seconds")
