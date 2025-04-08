@@ -5,7 +5,6 @@ import json
 import re
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from langchain.schema.output_parser import StrOutputParser
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +99,6 @@ class TimelineBuilder:
         logger.info("Finding turning points in the discussion")
         turning_points = await self._identify_turning_points(timeline_events, query)
         
-        # NEW: Identify and categorize important information
-        logger.info("Identifying and categorizing important information")
-        categories = await self._identify_categories(timeline_events, query)
-        logger.info(f"Identified {len(categories)} information categories")
-        
         # Build timeline data structure
         date_range = {
             "start": sorted_emails[0].get('date') if sorted_emails else None,
@@ -171,8 +165,7 @@ class TimelineBuilder:
             "timeframe": timeframe,
             "email_count": len(sorted_emails),
             "date_range": date_range,
-            "summary": summary,  # Add the generated summary to the timeline data
-            "categories": categories  # Add the new categories to the timeline data
+            "summary": summary  # Add the generated summary to the timeline data
         }
         
         # Log detailed timeline data for debugging
@@ -198,15 +191,6 @@ class TimelineBuilder:
             logger.info(f"  Point {i+1}: {event_info}")
             logger.info(f"    Description: {point.get('description', 'No description')}")
         
-        # Log categories
-        logger.info(f"Categories ({len(categories)}):")
-        for i, category in enumerate(categories):
-            logger.info(f"  Category {i+1}: {category.get('type', 'Unknown')}")
-            logger.info(f"    Items count: {len(category.get('items', []))}")
-            for j, item in enumerate(category.get('items', [])):
-                item_preview = item[:100] + "..." if len(item) > 100 else item
-                logger.info(f"      Item {j+1}: {item_preview}")
-        
         # Log contributors
         logger.info(f"Contributors ({len(contributors)}):")
         for contributor in contributors:
@@ -214,7 +198,7 @@ class TimelineBuilder:
         
         total_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"Timeline building completed in {total_time:.2f} seconds")
-        logger.info(f"Timeline contains {len(timeline_events)} events, {len(turning_points)} turning points, {len(categories)} categories")
+        logger.info(f"Timeline contains {len(timeline_events)} events, {len(turning_points)} turning points")
         logger.info(f"Timeline date range: {date_range['start']} to {date_range['end']}")
         
         return timeline_data
@@ -598,210 +582,15 @@ class TimelineBuilder:
             logger.info(f"Final turning points count: {len(turning_points)}")
             
             return turning_points
-
-    async def _identify_categories(
-        self,
-        events: List[Dict[str, Any]],
-        query: str
-    ) -> List[Dict[str, Any]]:
-        """Identify and categorize important information from the timeline events"""
-        logger.info(f"Identifying categories from {len(events)} events")
-        
-        start_time = datetime.now()
-        
-        if not events or len(events) < 1:
-            logger.info("Not enough events to identify categories")
-            return []
-            
-        try:
-            # Prepare content for LLM analysis
-            events_text = ""
-            for i, event in enumerate(events):
-                events_text += f"Event {i+1} ({event['date']}):\n"
-                events_text += f"From: {event['sender']}\n"
-                events_text += f"Subject: {event['subject']}\n"
-                events_text += f"Contribution: {event['contribution']}\n"
-                if event['key_points']:
-                    events_text += "Key points: " + ", ".join(event['key_points']) + "\n"
-                events_text += "\n"
-            
-            logger.info(f"Prepared events text of length {len(events_text)} for category analysis")
-            
-            # Use LLM to identify categories
-            prompt = PromptTemplate.from_template("""
-            Analyze this sequence of email events related to the query: "{query}"
-            
-            {events_text}
-            
-            Identify important information that falls into these categories:
-            - Critical Information: Essential facts that users must know
-            - Risks: Potential issues, concerns, or roadblocks
-            - Decisions: Choices made or conclusions reached
-            - Action Items: Tasks that need to be completed
-            
-            For each category, provide specific items extracted from the emails. Be precise and detailed.
-            Do not create generic items - extract actual information from the event content.
-            
-            FORMAT INSTRUCTIONS: Return your response as a JSON array with objects containing these keys: 
-            - "type" (string: one of the categories listed above)
-            - "items" (array of strings: specific items from the emails)
-            - "source_event_indices" (array of integers: the 1-based indices of events where these items were found)
-            
-            Example output format:
-            [
-              {
-                "type": "Critical Information",
-                "items": ["Budget cut by 25% announced on May 12", "VP will attend final presentation"],
-                "source_event_indices": [3, 5]
-              },
-              {
-                "type": "Risks",
-                "items": ["Server migration delayed by 2 weeks", "Testing resources insufficient"],
-                "source_event_indices": [2, 6]
-              }
-            ]
-            
-            IMPORTANT: Include at least one item for each category with SPECIFIC details from the emails.
-            If you truly cannot find information for a category, you may omit that category.
-            """)
-            
-            logger.info("Sending to LLM for category identification")
-            chain = prompt | self.llm
-            
-            response = await chain.ainvoke({
-                "query": query,
-                "events_text": events_text
-            })
-            
-            # Parse the response
-            import json
-            import re
-            
-            # Extract JSON from response
-            if hasattr(response, 'content'):
-                response_text = response.content
-            else:
-                response_text = str(response)
-            
-            logger.info(f"Received category analysis from LLM, length: {len(response_text)}")
-            logger.info(f"Response preview: {response_text[:150]}...")
-            
-            # Try to extract JSON array
-            json_match = re.search(r'(\[{.*}\])', response_text, re.DOTALL)
-            categories_raw = []
-            
-            if json_match:
-                try:
-                    matched_json = json_match.group(1)
-                    logger.info(f"Found JSON match: {matched_json[:150]}...")
-                    categories_raw = json.loads(matched_json)
-                    logger.info(f"Successfully parsed JSON with {len(categories_raw)} categories")
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSON parsing error: {str(e)}")
-                    logger.error(f"Failed JSON string: {json_match.group(1)[:150]}...")
-                    # We'll handle this in the fallback
-            else:
-                logger.warning("No JSON array found in LLM categories response")
-            
-            # Process categories - adjust indices to be 0-based for frontend
-            categories = []
-            
-            # If we have categories from LLM
-            if categories_raw:
-                for category in categories_raw:
-                    if "type" in category and "items" in category:
-                        # Convert source event indices from 1-based to 0-based
-                        source_indices = []
-                        if "source_event_indices" in category:
-                            source_indices = [idx - 1 for idx in category["source_event_indices"] if 0 <= idx - 1 < len(events)]
-                        
-                        processed_category = {
-                            "type": category["type"],
-                            "items": category.get("items", []),
-                            "source_event_indices": source_indices
-                        }
-                        categories.append(processed_category)
-                        logger.info(f"Identified category: {category['type']} with {len(category.get('items', []))} items")
-                        
-                        # Log each item for detailed debugging
-                        for i, item in enumerate(category.get("items", [])):
-                            logger.info(f"  - Item {i+1}: {item}")
-            
-            # If we didn't get any categories from the LLM, create fallback categories
-            if not categories and events:
-                # Create basic fallback categories with heuristics
-                logger.info("Using heuristic fallback for categories")
-                
-                # Critical Information - look for important keywords
-                critical_items = []
-                for i, event in enumerate(events):
-                    text = (event.get('contribution', '') + ' ' + 
-                           ' '.join(event.get('key_points', []))).lower()
-                    if any(kw in text for kw in ['important', 'critical', 'crucial', 'essential', 'key']):
-                        critical_items.append(f"From {event['sender']}: {event['subject']} ({event['date']})")
-                
-                # Risks - look for risk keywords
-                risk_items = []
-                for i, event in enumerate(events):
-                    text = (event.get('contribution', '') + ' ' + 
-                           ' '.join(event.get('key_points', []))).lower()
-                    if any(kw in text for kw in ['risk', 'issue', 'problem', 'concern', 'delay', 'fail']):
-                        risk_items.append(f"Potential issue in {event['subject']} ({event['date']})")
-                
-                # Decisions - look for decision keywords
-                decision_items = []
-                for i, event in enumerate(events):
-                    text = (event.get('contribution', '') + ' ' + 
-                           ' '.join(event.get('key_points', []))).lower()
-                    if any(kw in text for kw in ['decide', 'decision', 'concluded', 'agreement', 'approved']):
-                        decision_items.append(f"Decision in {event['subject']} ({event['date']})")
-                
-                # Add fallback categories if we found any items
-                if critical_items:
-                    categories.append({
-                        "type": "Critical Information",
-                        "items": critical_items,
-                        "source_event_indices": []
-                    })
-                    logger.info(f"Added fallback 'Critical Information' category with {len(critical_items)} items")
-                
-                if risk_items:
-                    categories.append({
-                        "type": "Risks",
-                        "items": risk_items,
-                        "source_event_indices": []
-                    })
-                    logger.info(f"Added fallback 'Risks' category with {len(risk_items)} items")
-                
-                if decision_items:
-                    categories.append({
-                        "type": "Decisions",
-                        "items": decision_items,
-                        "source_event_indices": []
-                    })
-                    logger.info(f"Added fallback 'Decisions' category with {len(decision_items)} items")
-                
-                # If we still don't have any categories, add a generic one
-                if not categories:
-                    categories.append({
-                        "type": "Key Information",
-                        "items": [f"Timeline contains {len(events)} emails related to '{query}'"],
-                        "source_event_indices": []
-                    })
-                    logger.info("Added generic fallback category as last resort")
-            
-            # Log processing time
-            processing_time = (datetime.now() - start_time).total_seconds()
-            logger.info(f"Category identification completed in {processing_time:.2f} seconds")
-            logger.info(f"Final categories count: {len(categories)}")
-            
-            return categories
                 
         except Exception as e:
-            logger.error(f"Error identifying categories: {str(e)}", exc_info=True)
-            # Return a fallback category
-            return [{
-                "type": "Key Information",
-                "items": [f"Timeline contains information about '{query}'"],
-                "source_event_indices": []
-            }]
+            logger.error(f"Error identifying turning points: {str(e)}", exc_info=True)
+            # Return a fallback turning point if possible
+            if events:
+                return [{
+                    "event_index": 0,
+                    "date": events[0]["date"],
+                    "sender": events[0]["sender"],
+                    "description": f"This email begins the discussion about '{query}'."
+                }]
+            return []
