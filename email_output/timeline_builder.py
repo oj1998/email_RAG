@@ -5,6 +5,7 @@ import json
 import re
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
+from langchain.schema.output_parser import StrOutputParser
 
 logger = logging.getLogger(__name__)
 
