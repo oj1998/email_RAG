@@ -42,6 +42,21 @@ class TimelineBuilder:
         
         # Combine all emails
         all_emails = [anchor_email] + related_emails
+
+
+        logger.info("========== EMAIL RELEVANCE SCORES ==========")
+        logger.info(f"Anchor email: '{anchor_email.get('subject')}' - Score: {anchor_email.get('confidence', 0):.4f}")
+        
+        for i, email in enumerate(related_emails):
+            logger.info(f"Related email #{i+1}: '{email.get('subject')}' FROM {email.get('sender')} - Score: {email.get('confidence', 0):.4f}")
+        logger.info("============================================")
+        
+        # Combine all emails
+        all_emails = [anchor_email] + related_emails
+        
+        # Log how many emails have zero or near-zero relevance
+        low_relevance_count = sum(1 for email in all_emails if email.get('confidence', 0) < 0.1)
+        logger.info(f"Number of emails with relevance score < 0.1: {low_relevance_count} out of {len(all_emails)}")
         
         # Sort by date
         logger.info("Sorting emails by date")
