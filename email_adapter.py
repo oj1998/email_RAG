@@ -187,6 +187,10 @@ async def process_email_query(query: str, conversation_id: str, context: Dict[st
         retrieval_time = (datetime.now() - retrieval_start_time).total_seconds()
         logger.info(f"Email retrieval completed in {retrieval_time:.2f} seconds, found {len(relevant_emails)} emails")
 
+        for i, email in enumerate(relevant_emails):
+            relevance_score = email.metadata.get("relevance_score", 0)
+            logger.info(f"Email #{i+1}: '{email.metadata.get('subject', 'No subject')}' - Score: {relevance_score:.2f}")
+
 
         filtered_emails = []
         for email in relevant_emails:
