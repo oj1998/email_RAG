@@ -158,7 +158,7 @@ async def process_variance_query(
         # Add this right before the return statement in process_variance_query
         logger.info(f"Returning variance analysis response: {json.dumps({
             'status': 'success',
-            'answer_preview': formatted_analysis[:100] + '...' if len(formatted_analysis) > 100 else formatted_analysis,
+            'answer_preview': formatted_analysis,
             'sources_count': len(sources),
             'metadata': {
                 'category': 'VARIANCE_ANALYSIS',
