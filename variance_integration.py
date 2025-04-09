@@ -156,6 +156,8 @@ async def process_variance_query(
         # Calculate processing time
         processing_time = (datetime.utcnow() - start_time).total_seconds()
 
+        logger.info(f"formatted_analysis: {formatted_analysis}")
+
         # Add this right before the return statement in process_variance_query
         logger.info(f"Returning variance analysis response: {json.dumps({
             'status': 'success',
