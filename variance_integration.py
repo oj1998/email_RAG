@@ -51,13 +51,13 @@ async def process_variance_query(
         # Initialize variance analysis components
         variance_retriever = VarianceDocumentRetriever(
             vector_store=vector_store,
-            llm=ChatOpenAI(model_name="gpt-4o", temperature=0.0),
+            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.0),
             min_relevance=0.65,
             max_documents=12
         )
         
         variance_analyzer = DocumentVarianceAnalyzer(
-            llm=ChatOpenAI(model_name="gpt-4o", temperature=0.2),
+            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.2),
             min_confidence=0.6
         )
         
@@ -154,6 +154,20 @@ async def process_variance_query(
         
         # Calculate processing time
         processing_time = (datetime.utcnow() - start_time).total_seconds()
+
+        # Add this right before the return statement in process_variance_query
+        logger.info(f"Returning variance analysis response: {json.dumps({
+            'status': 'success',
+            'answer_preview': formatted_analysis[:100] + '...' if len(formatted_analysis) > 100 else formatted_analysis,
+            'sources_count': len(sources),
+            'metadata': {
+                'category': 'VARIANCE_ANALYSIS',
+                'format_used': format_style,
+                'topic': analysis_result.topic,
+                'variance_count': len(analysis_result.key_variances),
+                'agreement_points': len(analysis_result.agreement_points)
+            }
+        }, default=str)}")
         
         # 6. Prepare and return complete response
         return {
