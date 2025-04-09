@@ -51,13 +51,13 @@ async def process_variance_query(
         # Initialize variance analysis components
         variance_retriever = VarianceDocumentRetriever(
             vector_store=vector_store,
-            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.0),
+            llm=ChatOpenAI(model_name="gpt-4o", temperature=0.0),
             min_relevance=0.65,
             max_documents=12
         )
         
         variance_analyzer = DocumentVarianceAnalyzer(
-            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.2),
+            llm=ChatOpenAI(model_name="gpt-4o", temperature=0.2),
             min_confidence=0.6
         )
         
