@@ -560,11 +560,14 @@ class ConstructionClassifier:
                     classification['suggested_format'] = {}
                 classification['suggested_format']['is_comparison'] = True
                 
-                # If not already categorized as COMPARISON, consider overriding
-                if classification['category'] != 'COMPARISON' and classification['confidence'] < 0.8:
+                # Only set to COMPARISON if:
+                # 1. The confidence of existing category is low (<0.6) OR
+                # 2. We have very high confidence this is a comparison (based on pattern strength)
+                if (classification['category'] != 'COMPARISON' and classification['confidence'] < 0.6) or \
+                   (question.lower().count('vs') > 0 or 'compare' in question.lower() or 'difference between' in question.lower()):
                     classification['category'] = 'COMPARISON'
                     if 'reasoning' in classification:
-                        classification['reasoning'] += " Detected comparison query patterns."
+                        classification['reasoning'] += " Detected strong comparison query patterns."
             
             # Validate the classification format
             if not all(key in classification for key in ["category", "confidence", "reasoning"]):
