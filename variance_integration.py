@@ -105,8 +105,8 @@ async def process_variance_query(
             documents=merged_documents if merged_documents else documents
         )
         
-        # 3. Generate both text and structured data versions
-        format_style = VarianceFormatStyle.TABULAR  # Default format for text
+        # 3. Determine the best format based on classification and context
+        format_style = VarianceFormatStyle.TABULAR  # Default format
         
         # Use classification to pick a better format if available
         if hasattr(classification, 'suggested_format') and classification.suggested_format:
@@ -117,20 +117,20 @@ async def process_variance_query(
                 format_style = VarianceFormatStyle.TABULAR
             elif style == "visual":
                 format_style = VarianceFormatStyle.VISUAL
-        
-        # Format as text for compatibility with existing interfaces
-        formatted_text = variance_formatter.format_variance_analysis(
+                
+        # If intent analysis suggests this is a more in-depth analysis, use narrative
+        if intent_analysis and hasattr(intent_analysis, 'primary_intent'):
+            if intent_analysis.primary_intent == QueryIntent.INFORMATION:
+                format_style = VarianceFormatStyle.NARRATIVE
+                
+        # 4. Format the variance analysis
+        logger.info(f"Formatting variance analysis with style: {format_style}")
+        formatted_analysis = variance_formatter.format_variance_analysis(
             analysis=analysis_result,
             format_style=format_style
         )
         
-        # Also format as JSON for structured frontend rendering
-        structured_data = variance_formatter.format_variance_analysis(
-            analysis=analysis_result,
-            format_style=VarianceFormatStyle.JSON
-        )
-        
-        # 5. Prepare sources for response (for backward compatibility)
+        # 5. Prepare sources for response
         sources = []
         for variance in analysis_result.key_variances:
             for doc_id, positions in variance.source_positions.items():
@@ -148,18 +148,34 @@ async def process_variance_query(
                     "page": doc_metadata.get("page"),
                     "confidence": variance.confidence,
                     "aspect": variance.aspect,
+                    "position": ", ".join(positions),
                     "excerpt": variance.source_excerpts.get(doc_id, "No excerpt available"),
                     "reliability": analysis_result.reliability_ranking.get(doc_id, 0.5)
                 })
         
         # Calculate processing time
         processing_time = (datetime.utcnow() - start_time).total_seconds()
+
+        logger.info(f"formatted_analysis: {formatted_analysis}")
+
+        # Add this right before the return statement in process_variance_query
+        logger.info(f"Returning variance analysis response: {json.dumps({
+            'status': 'success',
+            'answer_preview': formatted_analysis,
+            'sources_count': len(sources),
+            'metadata': {
+                'category': 'VARIANCE_ANALYSIS',
+                'format_used': format_style,
+                'topic': analysis_result.topic,
+                'variance_count': len(analysis_result.key_variances),
+                'agreement_points': len(analysis_result.agreement_points)
+            }
+        }, default=str)}")
         
         # 6. Prepare and return complete response
         return {
             "status": "success",
-            "answer": formatted_text,
-            "structured_data": structured_data,  # Add structured data to response
+            "answer": formatted_analysis,
             "classification": classification.dict() if hasattr(classification, 'dict') else classification,
             "sources": sources,
             "metadata": {
@@ -172,8 +188,7 @@ async def process_variance_query(
                 "format_used": format_style,
                 "topic": analysis_result.topic,
                 "variance_count": len(analysis_result.key_variances),
-                "agreement_points": len(analysis_result.agreement_points),
-                "has_structured_data": True  # Flag to indicate structured data is available
+                "agreement_points": len(analysis_result.agreement_points)
             }
         }
         
