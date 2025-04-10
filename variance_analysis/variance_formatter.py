@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 from pydantic import BaseModel, Field
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class VarianceFormatStyle(str, Enum):
     TABULAR = "tabular"
     NARRATIVE = "narrative"
     VISUAL = "visual"
+    JSON = "json"
 
 class VarianceFormatter:
     """Formats variance analysis results for presentation"""
