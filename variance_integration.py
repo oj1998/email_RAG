@@ -36,68 +36,6 @@ def is_variance_analysis_query(question: str) -> bool:
     strict_pattern = r"(differences|discrepancies|variations|conflicts) between (sources|documents|references)"
     return bool(re.search(strict_pattern, question.lower()))
 
-# Create a custom VarianceFormatter that produces cleaner source position formatting
-class EnhancedVarianceFormatter(VarianceFormatter):
-    def format_variance_analysis(self, analysis: TopicVarianceAnalysis, format_style: VarianceFormatStyle, documents=None):
-        """Override the standard formatter to use cleaner source position formatting"""
-        # Start with standard title and assessment
-        formatted_text = f"# {analysis.topic}:\n\n"
-        formatted_text += "Overall Assessment:\n"
-        formatted_text += f"{analysis.assessment}\n\n"
-        
-        # Format areas of consensus
-        formatted_text += "## Areas of Consensus\n\n"
-        for point in analysis.agreement_points:
-            formatted_text += f"- {point}\n"
-        formatted_text += "\n"
-        
-        # Format areas of divergence with our improved source position formatting
-        formatted_text += "## Areas of Divergence\n\n"
-        
-        # Create a mapping of document IDs to source numbers for cleaner references
-        doc_map = {}
-        all_doc_ids = set()
-        for variance in analysis.key_variances:
-            all_doc_ids.update(variance.source_positions.keys())
-            
-        for i, doc_id in enumerate(all_doc_ids):
-            doc_map[doc_id] = f"Source {i+1}"
-        
-        # Now format each variance with the source mapping
-        for variance in analysis.key_variances:
-            formatted_text += f"### {variance.aspect}\n\n"
-            formatted_text += f"{variance.description}\n\n"
-            
-            # Use our improved source position formatting
-            formatted_text += self.format_source_positions(variance, doc_map)
-        
-        # Add reliability assessment
-        formatted_text += "## Source Reliability Assessment\n\n"
-        reliability_text = analysis.reliability_assessment or "No reliability assessment available."
-        formatted_text += f"{reliability_text}\n"
-        
-        return formatted_text
-    
-    def format_source_positions(self, variance, doc_map):
-        """Format source positions in a cleaner way"""
-        formatted_text = "#### Source Positions:\n\n"
-        
-        # Use source numbers instead of raw IDs in formatted text
-        for doc_id, positions in variance.source_positions.items():
-            source_name = doc_map.get(doc_id, f"Source (Unknown)")
-            
-            # Format with source number instead of raw ID
-            formatted_text += f"**{source_name}** ({doc_id}):\n"
-            
-            # Add excerpt if available
-            excerpt = variance.source_excerpts.get(doc_id, "")
-            if excerpt:
-                formatted_text += f"> {excerpt}\n\n"
-            else:
-                formatted_text += "\n"
-        
-        return formatted_text
-
 # Main processing function for variance analysis queries
 async def process_variance_query(
     request: QueryRequest,
@@ -124,8 +62,7 @@ async def process_variance_query(
             min_confidence=0.6
         )
         
-        # Use our enhanced formatter instead of the standard one
-        variance_formatter = EnhancedVarianceFormatter()
+        variance_formatter = VarianceFormatter()
         
         # Prepare metadata filter
         metadata_filter = {}
@@ -168,8 +105,8 @@ async def process_variance_query(
             documents=merged_documents if merged_documents else documents
         )
         
-        # 3. Determine the best format based on classification and context
-        format_style = VarianceFormatStyle.TABULAR  # Default format
+        # 3. Generate both text and structured data versions
+        format_style = VarianceFormatStyle.TABULAR  # Default format for text
         
         # Use classification to pick a better format if available
         if hasattr(classification, 'suggested_format') and classification.suggested_format:
@@ -180,30 +117,20 @@ async def process_variance_query(
                 format_style = VarianceFormatStyle.TABULAR
             elif style == "visual":
                 format_style = VarianceFormatStyle.VISUAL
-                
-        # If intent analysis suggests this is a more in-depth analysis, use narrative
-        if intent_analysis and hasattr(intent_analysis, 'primary_intent'):
-            if intent_analysis.primary_intent == QueryIntent.INFORMATION:
-                format_style = VarianceFormatStyle.NARRATIVE
         
-        # Create source number mapping
-        doc_map = {}
-        all_doc_ids = set()
-        for variance in analysis_result.key_variances:
-            all_doc_ids.update(variance.source_positions.keys())
-            
-        for i, doc_id in enumerate(all_doc_ids):
-            doc_map[doc_id] = f"Source {i+1}"
-                
-        # 4. Format the variance analysis
-        logger.info(f"Formatting variance analysis with style: {format_style}")
-        formatted_analysis = variance_formatter.format_variance_analysis(
+        # Format as text for compatibility with existing interfaces
+        formatted_text = variance_formatter.format_variance_analysis(
             analysis=analysis_result,
-            format_style=format_style,
-            documents=merged_documents if merged_documents else documents
+            format_style=format_style
         )
         
-        # 5. Prepare sources for response with improved source references
+        # Also format as JSON for structured frontend rendering
+        structured_data = variance_formatter.format_variance_analysis(
+            analysis=analysis_result,
+            format_style=VarianceFormatStyle.JSON
+        )
+        
+        # 5. Prepare sources for response (for backward compatibility)
         sources = []
         for variance in analysis_result.key_variances:
             for doc_id, positions in variance.source_positions.items():
@@ -214,42 +141,25 @@ async def process_variance_query(
                     {}
                 )
                 
-                # Add source with variance-specific information and source number mapping
+                # Add source with variance-specific information
                 sources.append({
                     "id": doc_id,
-                    "source_number": doc_map.get(doc_id, "Unknown Source"),  # Add source number
                     "title": doc_metadata.get("title", "Unknown Document"),
                     "page": doc_metadata.get("page"),
                     "confidence": variance.confidence,
                     "aspect": variance.aspect,
-                    "position": ", ".join(positions) if positions else "",
                     "excerpt": variance.source_excerpts.get(doc_id, "No excerpt available"),
                     "reliability": analysis_result.reliability_ranking.get(doc_id, 0.5)
                 })
         
         # Calculate processing time
         processing_time = (datetime.utcnow() - start_time).total_seconds()
-
-        logger.info(f"formatted_analysis: {formatted_analysis}")
-
-        # Add this right before the return statement in process_variance_query
-        logger.info(f"Returning variance analysis response: {json.dumps({
-            'status': 'success',
-            'answer_preview': formatted_analysis,
-            'sources_count': len(sources),
-            'metadata': {
-                'category': 'VARIANCE_ANALYSIS',
-                'format_used': format_style,
-                'topic': analysis_result.topic,
-                'variance_count': len(analysis_result.key_variances),
-                'agreement_points': len(analysis_result.agreement_points)
-            }
-        }, default=str)}")
         
         # 6. Prepare and return complete response
         return {
             "status": "success",
-            "answer": formatted_analysis,
+            "answer": formatted_text,
+            "structured_data": structured_data,  # Add structured data to response
             "classification": classification.dict() if hasattr(classification, 'dict') else classification,
             "sources": sources,
             "metadata": {
@@ -263,7 +173,7 @@ async def process_variance_query(
                 "topic": analysis_result.topic,
                 "variance_count": len(analysis_result.key_variances),
                 "agreement_points": len(analysis_result.agreement_points),
-                "source_mapping": doc_map  # Include source mapping in metadata
+                "has_structured_data": True  # Flag to indicate structured data is available
             }
         }
         
