@@ -2,7 +2,6 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 from pydantic import BaseModel, Field
 import logging
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,6 @@ class VarianceFormatStyle(str, Enum):
     TABULAR = "tabular"
     NARRATIVE = "narrative"
     VISUAL = "visual"
-    JSON = "json"
 
 class VarianceFormatter:
     """Formats variance analysis results for presentation"""
@@ -48,69 +46,8 @@ class VarianceFormatter:
             return self._format_tabular(analysis)
         elif format_style == VarianceFormatStyle.VISUAL:
             return self._format_visual(analysis)
-        elif format_style == VarianceFormatStyle.JSON:
-            return self._format_as_json(analysis)
         else:  # NARRATIVE is the default fallback
             return self._format_narrative(analysis)
-    
-    def _format_as_json(self, analysis: TopicVarianceAnalysis) -> str:
-        """Format variance analysis as structured JSON for direct frontend consumption."""
-        structured_data = {
-            "topic": analysis.topic,
-            "assessment": analysis.general_assessment,
-            "agreementPoints": analysis.agreement_points,
-            "variances": [],
-            "reliabilityAssessment": ""  # You may want to generate this from reliability data
-        }
-        
-        # Add reliability assessment text
-        variance_count = len(analysis.key_variances)
-        if variance_count == 0:
-            variance_level = "no significant variances"
-        elif variance_count <= 2:
-            variance_level = "minor variances"
-        elif variance_count <= 5:
-            variance_level = "moderate variances"
-        else:
-            variance_level = "significant variances"
-        
-        reliability_text = f"The analysis found {variance_level} between the {analysis.source_count} sources examined. "
-        
-        # Add reliability notes
-        sorted_sources = sorted(
-            analysis.reliability_ranking.items(), 
-            key=lambda x: x[1], 
-            reverse=True
-        )
-        
-        if sorted_sources:
-            most_reliable = sorted_sources[0][0]
-            reliability_text += f"Based on metadata and content analysis, source {most_reliable} appears to be the most reliable, "
-            
-            if len(sorted_sources) > 1:
-                least_reliable = sorted_sources[-1][0]
-                reliability_text += f"while {least_reliable} shows lower reliability indicators."
-            else:
-                reliability_text += "."
-        
-        structured_data["reliabilityAssessment"] = reliability_text
-        
-        for variance in analysis.key_variances:
-            # Convert source positions to a more frontend-friendly format
-            sources = []
-            for doc_id, positions in variance.source_positions.items():
-                sources.append({
-                    "documentId": doc_id,
-                    "excerpt": variance.source_excerpts.get(doc_id, "No excerpt available")
-                })
-            
-            structured_data["variances"].append({
-                "aspect": variance.aspect,
-                "description": variance.variance_description,
-                "sources": sources
-            })
-        
-        return json.dumps(structured_data)
             
     def _format_side_by_side(self, analysis: TopicVarianceAnalysis) -> str:
         """Format analysis with sources side by side for each variance"""
