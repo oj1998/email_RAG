@@ -51,5 +51,7 @@ pydantic
 aiohttp
 tiktoken
 
+pdfjs-dist==3.11.174
+
 # Local Package
 -e .
