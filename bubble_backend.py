@@ -670,6 +670,7 @@ async def process_document_query(
     """Enhanced document query processing with improved source attribution"""
     async with concurrent_query_semaphore:
         total_start = time.time()
+        start_time = datetime.utcnow()
         
         if not pool or not vector_store:
             raise HTTPException(status_code=503, detail="Service not fully initialized")
