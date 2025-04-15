@@ -347,6 +347,7 @@ class ConstructionClassifier:
         
         # Start timing
         start_time = datetime.now()
+        class_start = time.time()
         
         # Create request tracking object
         # Convert context to serializable format
@@ -401,6 +402,7 @@ class ConstructionClassifier:
         
         # Fast-track for emergency queries to ensure they always get proper classification
         if self.is_emergency_query(question):
+            emerg_time = time.time()
             logger.info(f"[CLASS-{request_id}] Emergency query detected: '{question}'")
             
             result = QuestionType(
@@ -424,12 +426,16 @@ class ConstructionClassifier:
             request.estimated_cost = 0  # No API call made
             
             # Log completion
+            emerg_end = time.time()
             logger.info(f"[CLASS-{request_id}] Emergency fast-track completed in {processing_time:.3f}s")
+            perf_logger.info(f"Emergency classification: {(emerg_end - emerg_time) * 1000:.2f}ms")
+            perf_logger.info(f"Total classification: {(emerg_end - class_start) * 1000:.2f}ms")
             self._update_stats(request)
             
             return result
             
         # Check for simple queries that don't need GPT-4
+        simple_start = time.time()
         simple_result = self._is_simple_query(question)
         if simple_result:
             logger.info(f"[CLASS-{request_id}] Simple query pattern detected: '{question}'")
@@ -443,12 +449,16 @@ class ConstructionClassifier:
             request.estimated_cost = 0  # No API call made
             
             # Log completion
+            simple_end = time.time()
             logger.info(f"[CLASS-{request_id}] Simple pattern match completed in {processing_time:.3f}s")
+            perf_logger.info(f"Simple classification: {(simple_end - simple_start) * 1000:.2f}ms")
+            perf_logger.info(f"Total classification: {(simple_end - class_start) * 1000:.2f}ms")
             self._update_stats(request)
             
             return simple_result
             
         # Check cache for existing classification
+        cache_start = time.time()
         cached_result = self._check_cache(question)
         if cached_result:
             logger.info(f"[CLASS-{request_id}] Cache hit for: '{question[:50]}...'")
@@ -463,17 +473,24 @@ class ConstructionClassifier:
             request.cache_hit = True
             
             # Log completion
+            cache_end = time.time()
             logger.info(f"[CLASS-{request_id}] Cached classification retrieved in {processing_time:.3f}s")
+            perf_logger.info(f"Cache lookup: {(cache_end - cache_start) * 1000:.2f}ms")
+            perf_logger.info(f"Total classification (cached): {(cache_end - class_start) * 1000:.2f}ms")
             self._update_stats(request)
             
             return cached_result
             
         try:
             # Check if this is a comparison question
+            comparison_start = time.time()
             is_comparison = await self.is_comparison_query(question)
+            comparison_end = time.time()
             logger.debug(f"[CLASS-{request_id}] Comparison query check: {is_comparison}")
+            perf_logger.info(f"Comparison check: {(comparison_end - comparison_start) * 1000:.2f}ms")
                 
             # Format the prompt with all context
+            prompt_start = time.time()
             prompt = self.base_prompt.format_messages(
                 question=question,
                 conversation_context=context_str,
@@ -487,6 +504,8 @@ class ConstructionClassifier:
             # Count input tokens
             input_tokens = count_tokens(prompt_str, model=self.llm.model_name)
             request.input_tokens = input_tokens
+            prompt_end = time.time()
+            perf_logger.info(f"Prompt preparation: {(prompt_end - prompt_start) * 1000:.2f}ms")
             
             # Log before API call
             logger.info(f"[CLASS-{request_id}] Sending to {self.llm.model_name} ({input_tokens} tokens)")
@@ -499,24 +518,29 @@ class ConstructionClassifier:
             
             # Track API call duration
             api_duration = time.time() - api_start_time
+            perf_logger.info(f"LLM API call: {api_duration * 1000:.2f}ms")
             
             # Store response
             response_text = response.content.strip()
             request.response_text = response_text
             
             # Count output tokens
+            tokens_start = time.time()
             output_tokens = count_tokens(response_text, model=self.llm.model_name)
             request.output_tokens = output_tokens
             
             # Calculate cost
             cost = self._estimate_cost(input_tokens, output_tokens, model=self.llm.model_name)
             request.estimated_cost = cost
+            tokens_end = time.time()
+            perf_logger.info(f"Token counting: {(tokens_end - tokens_start) * 1000:.2f}ms")
             
             # Log after API call
             logger.info(f"[CLASS-{request_id}] Received response from {self.llm.model_name} " +
                        f"in {api_duration:.3f}s ({output_tokens} tokens, est. cost: ${cost:.6f})")
             
             # Improved JSON parsing with error handling
+            parsing_start = time.time()
             try:
                 # Clean and parse the JSON response
                 content = response.content.strip()
@@ -553,8 +577,11 @@ class ConstructionClassifier:
                 }
                 
                 logger.info(f"[CLASS-{request_id}] Using fallback classification: {classification['category']}")
+            parsing_end = time.time()
+            perf_logger.info(f"Response parsing: {(parsing_end - parsing_start) * 1000:.2f}ms")
             
             # Add comparison flag to the classification if detected
+            post_start = time.time()
             if is_comparison:
                 if 'suggested_format' not in classification:
                     classification['suggested_format'] = {}
@@ -580,6 +607,8 @@ class ConstructionClassifier:
             # Parse into QuestionType and apply enhancements
             result = QuestionType(**classification)
             result = self._enhance_safety_confidence(result)
+            post_end = time.time()
+            perf_logger.info(f"Post-processing: {(post_end - post_start) * 1000:.2f}ms")
             
             # Update request tracking with final details
             processing_time = (datetime.now() - start_time).total_seconds()
@@ -589,11 +618,16 @@ class ConstructionClassifier:
             request.processing_time = processing_time
             
             # Update cache with result
+            cache_update_start = time.time()
             self._update_cache(question, result)
+            cache_update_end = time.time()
+            perf_logger.info(f"Cache update: {(cache_update_end - cache_update_start) * 1000:.2f}ms")
             
             # Log success
+            class_end = time.time()
             logger.info(f"[CLASS-{request_id}] Classification completed in {processing_time:.3f}s: " +
                        f"{result.category} (confidence: {result.confidence:.2f})")
+            perf_logger.info(f"Total classification: {(class_end - class_start) * 1000:.2f}ms")
             
             # Update stats
             self._update_stats(request)
@@ -612,6 +646,7 @@ class ConstructionClassifier:
             logger.error(f"[CLASS-{request_id}] Classification error: {str(e)}")
             
             # Enhanced fallback classification with context awareness
+            error_start = time.time()
             if self.is_emergency_query(question):
                 result = QuestionType(
                     category="SAFETY",
@@ -640,7 +675,10 @@ class ConstructionClassifier:
             # Update stats including error
             self._update_stats(request)
             
+            error_end = time.time()
             logger.info(f"[CLASS-{request_id}] Error recovery generated fallback classification: {result.category}")
+            perf_logger.info(f"Error handling: {(error_end - error_start) * 1000:.2f}ms")
+            perf_logger.info(f"Total classification (error): {(error_end - class_start) * 1000:.2f}ms")
             
             return result
 
