@@ -17,6 +17,14 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+perf_logger = logging.getLogger("timing")
+perf_logger.setLevel(logging.INFO)
+if not any(isinstance(h, logging.FileHandler) for h in perf_logger.handlers):
+    perf_handler = logging.FileHandler("timing.log")
+    perf_formatter = logging.Formatter('%(asctime)s - %(message)s')
+    perf_handler.setFormatter(perf_formatter)
+    perf_logger.addHandler(perf_handler)
+
 class SourceAttribution(BaseModel):
     """Tracks which parts of the response came from which sources"""
     content: str
