@@ -171,17 +171,9 @@ class EnhancedSmartResponseGenerator:
         metadata_filter: Optional[Dict[str, Any]] = None,
         k: int = 2  # Reduced from 5 to 3 by default
     ) -> List[Document]:
-        """Get relevant documents with reduced count to limit API calls
+        """Get relevant documents with reduced count to limit API calls"""
+        retrieval_start = time.time()
         
-        Args:
-            query: The user's question
-            classification: The question category classification
-            metadata_filter: Optional dict of metadata filters
-            k: Number of documents to retrieve (reduced default)
-            
-        Returns:
-            List[Document]: Relevant documents
-        """
         # Adjust search parameters based on classification - use more conservative values
         search_k = min(k + 2, 2) if classification.category == "SAFETY" else k
         
@@ -201,75 +193,49 @@ class EnhancedSmartResponseGenerator:
             
             # Use asyncio.to_thread for better async handling
             try:
+                search_start = time.time()
                 docs_with_scores = await asyncio.to_thread(
                     self.vector_store.similarity_search_with_score,
                     query,
                     **search_kwargs
                 )
+                search_time = time.time() - search_start
+                perf_logger.info(f"Vector similarity search: {search_time * 1000:.2f}ms")
             except Exception as e:
                 logger.warning(f"similarity_search_with_score failed: {str(e)}, falling back to basic retrieval")
+                fallback_start = time.time()
                 docs = await asyncio.to_thread(
                     self.vector_store.similarity_search,
                     query,
                     k=search_k
                 )
+                fallback_time = time.time() - fallback_start
+                perf_logger.info(f"Fallback basic retrieval: {fallback_time * 1000:.2f}ms")
                 # Create dummy scores
                 docs_with_scores = [(doc, 0.75) for doc in docs]
             
             # Add scores to document metadata
+            process_start = time.time()
             docs = []
             for doc, score in docs_with_scores:
                 doc.metadata['similarity'] = float(score)
                 docs.append(doc)
+            process_time = time.time() - process_start
+            perf_logger.info(f"Document processing: {process_time * 1000:.2f}ms")
                 
             logger.info(f"Retrieved {len(docs)} relevant documents")
+            
+            retrieval_total = time.time() - retrieval_start
+            perf_logger.info(f"Total document retrieval: {retrieval_total * 1000:.2f}ms")
             return docs
             
         except Exception as e:
+            retrieval_error = time.time() - retrieval_start
             logger.error(f"Error retrieving documents: {str(e)}")
+            perf_logger.info(f"Failed document retrieval: {retrieval_error * 1000:.2f}ms")
             # Return empty list on failure rather than crashing
             return []
-
-    async def _batch_embed_documents(self, texts, batch_size=100):
-        """Batch process document embeddings with optimal batch size
-        
-        Args:
-            texts: List of text strings to embed
-            batch_size: Size of batches to process (default 100)
-            
-        Returns:
-            List of embeddings for all texts
-        """
-        if not texts:
-            return []
-        
-        # Group texts into sensible batches
-        batches = [texts[i:i+batch_size] for i in range(0, len(texts), batch_size)]
-        
-        logger.info(f"Processing {len(texts)} texts in {len(batches)} batches")
-        
-        all_embeddings = []
-        
-        for i, batch in enumerate(batches):
-            try:
-                logger.info(f"Embedding batch {i+1}/{len(batches)} with {len(batch)} texts")
-                # Use asyncio.to_thread for better async handling
-                batch_embeddings = await asyncio.to_thread(
-                    self.embeddings_model.embed_documents,
-                    batch
-                )
-                all_embeddings.extend(batch_embeddings)
-                logger.info(f"Successfully embedded batch {i+1}")
-            except Exception as e:
-                logger.error(f"Error embedding batch {i+1}: {str(e)}")
-                # Generate fallback embeddings for failed batch
-                import numpy as np
-                fallback_embeddings = [np.random.normal(0, 0.01, 1536).tolist() for _ in range(len(batch))]
-                all_embeddings.extend(fallback_embeddings)
-                logger.warning(f"Using fallback embeddings for batch {i+1}")
-        
-        return all_embeddings
-
+    
     async def _extract_attributions(
         self,
         response: str,
@@ -278,7 +244,7 @@ class EnhancedSmartResponseGenerator:
         pool=None
     ) -> List[SourceAttribution]:
         """Extract source attributions without re-embedding documents"""
-        start_time = datetime.utcnow()
+        attribution_start = time.time()
         
         if not documents:
             return []
@@ -287,24 +253,32 @@ class EnhancedSmartResponseGenerator:
         
         # Add this at the beginning to inspect a few rows
         try:
+            db_inspect_start = time.time()
             async with pool.acquire() as conn:
                 # Check what columns and data actually exist in the table
                 sample_rows = await conn.fetch(
                     "SELECT uuid, custom_id, CASE WHEN embedding IS NULL THEN 'NULL' ELSE 'NOT NULL' END AS has_embedding FROM langchain_pg_embedding LIMIT 3"
                 )
                 logger.info(f"Sample rows from langchain_pg_embedding: {sample_rows}")
+            db_inspect_time = time.time() - db_inspect_start
+            perf_logger.info(f"Database inspection: {db_inspect_time * 1000:.2f}ms")
         except Exception as e:
             logger.warning(f"Failed to inspect database: {str(e)}")
         
         try:
             # Get response embedding only once
+            embed_start = time.time()
             response_embedding = await asyncio.to_thread(
                 self.embeddings_model.embed_query, 
                 response
             )
+            embed_time = time.time() - embed_start
+            perf_logger.info(f"Response embedding: {embed_time * 1000:.2f}ms")
             
             # Instead of re-embedding, directly use each document
-            for doc in documents:
+            doc_process_start = time.time()
+            for doc_idx, doc in enumerate(documents):
+                doc_start = time.time()
                 if not hasattr(doc, 'page_content') or not doc.page_content.strip():
                     continue
                 
@@ -318,6 +292,7 @@ class EnhancedSmartResponseGenerator:
                 # After modification
                 try:
                     # Log the document ID we're trying to look up
+                    db_lookup_start = time.time()
                     logger.info(f"Attempting to retrieve embedding for document ID: {document_id}")
                     
                     async with pool.acquire() as conn:
@@ -362,18 +337,24 @@ class EnhancedSmartResponseGenerator:
                                 except Exception as e:
                                     logger.warning(f"Failed to convert string embedding to array: {str(e)}")
                                     embedding = None
+                    db_lookup_time = time.time() - db_lookup_start
+                    perf_logger.info(f"DB embedding lookup for doc {doc_idx+1}: {db_lookup_time * 1000:.2f}ms")
                 except Exception as e:
                     logger.warning(f"Failed to get embedding from database: {str(e)}")
                 
                 # Fallback to generating a new embedding if we couldn't get it from DB
                 if embedding is None:
+                    embed_fallback_start = time.time()
                     embedding = await asyncio.to_thread(
                         self.embeddings_model.embed_query,
                         content
                     )
+                    embed_fallback_time = time.time() - embed_fallback_start
                     logger.info(f"Generated new embedding for document {document_id} (fallback)")
+                    perf_logger.info(f"Fallback embedding for doc {doc_idx+1}: {embed_fallback_time * 1000:.2f}ms")
                 
                 # Calculate semantic similarity using cosine similarity
+                sim_start = time.time()
                 semantic_similarity = np.dot(response_embedding, embedding)
                 semantic_similarity = (semantic_similarity + 1) / 2  # Convert to 0-1 range
                 
@@ -387,6 +368,8 @@ class EnhancedSmartResponseGenerator:
                     semantic_weight * semantic_similarity +
                     overlap_weight * content_overlap
                 )
+                sim_time = time.time() - sim_start
+                perf_logger.info(f"Similarity calculation for doc {doc_idx+1}: {sim_time * 1000:.2f}ms")
                 
                 if confidence < self.min_confidence:
                     continue
@@ -403,18 +386,29 @@ class EnhancedSmartResponseGenerator:
                         document_type=metadata.get('document_type')
                     )
                 )
-                
+                doc_time = time.time() - doc_start
+                perf_logger.info(f"Total processing for doc {doc_idx+1}: {doc_time * 1000:.2f}ms")
+            
+            doc_process_time = time.time() - doc_process_start
+            perf_logger.info(f"Document processing: {doc_process_time * 1000:.2f}ms")
+            
             # Sort by confidence and return
+            sort_start = time.time()
             attributions = sorted(attributions, key=lambda x: x.confidence, reverse=True)
+            sort_time = time.time() - sort_start
+            perf_logger.info(f"Attribution sorting: {sort_time * 1000:.2f}ms")
             
             # Calculate processing time for logging
-            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            logger.info(f"Attribution extraction took {processing_time:.2f}ms")
+            attribution_total = time.time() - attribution_start
+            logger.info(f"Attribution extraction took {attribution_total:.2f}s")
+            perf_logger.info(f"Total attribution extraction: {attribution_total * 1000:.2f}ms")
             
             return attributions
             
         except Exception as e:
+            attribution_error = time.time() - attribution_start
             logger.error(f"Error in attribution extraction: {str(e)}")
+            perf_logger.info(f"Failed attribution extraction: {attribution_error * 1000:.2f}ms")
             return []  # Return empty list on failure
 
     def _calculate_content_overlap(self, text1: str, text2: str) -> float:
