@@ -114,6 +114,33 @@ class EnhancedSmartResponseGenerator:
             ("user", "Question: {query}\nCategory: {category}\nContext Documents: {context}")
         ])
 
+    def _smart_truncate(self, text: str, max_length: int = 500) -> str:
+        """Truncate text at sentence or paragraph boundaries"""
+        if len(text) <= max_length:
+            return text
+            
+        # Try to find a sentence boundary to truncate at
+        truncated = text[:max_length]
+        
+        # Look for last sentence boundary (., !, ?)
+        last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+        
+        if last_period > max_length * 0.5:  # If we found a good break point
+            return text[:last_period+1] + "..."
+        
+        # Fallback to paragraph boundary
+        last_newline = truncated.rfind('\n')
+        if last_newline > max_length * 0.5:
+            return text[:last_newline] + "..."
+        
+        # Fallback to word boundary
+        last_space = truncated.rfind(' ')
+        if last_space > 0:
+            return text[:last_space] + "..."
+        
+        # Last resort: just truncate
+        return truncated + "..."
+
     async def should_use_sources(
             self,
             query: str,
@@ -385,7 +412,7 @@ class EnhancedSmartResponseGenerator:
                     
                 attributions.append(
                     EnhancedSourceAttribution(
-                        content=content[:200] + "..." if len(content) > 200 else content,
+                        content=self._smart_truncate(content, max_length=500),
                         source_id=document_id,
                         page_number=metadata.get('page'),
                         confidence=round(float(confidence), 4),
@@ -458,7 +485,7 @@ class EnhancedSmartResponseGenerator:
         
         return basic_similarity
         
-    def _extract_best_excerpt(self, document_content: str, response: str, max_length: int = 220) -> str:
+    def _extract_best_excerpt(self, document_content: str, response: str, max_length: int = 500) -> str:
         """Extract the most relevant excerpt from a document
         
         Args:
@@ -480,7 +507,7 @@ class EnhancedSmartResponseGenerator:
         if len(paragraphs) == 1:
             content = paragraphs[0]
             if len(content) > max_length:
-                return content[:max_length] + "..."
+                return self._smart_truncate(content, max_length)
             return content
             
         # Calculate similarity for each paragraph
@@ -507,12 +534,12 @@ class EnhancedSmartResponseGenerator:
         # Sort by score and combine best paragraphs up to max length
         if not para_scores:
             # Fall back to first part of document
-            return document_content[:max_length] + "..."
+            return self._smart_truncate(document_content, max_length)
             
         para_scores.sort(reverse=True)
         
         # Take best paragraph
         best_para = para_scores[0][1]
         if len(best_para) > max_length:
-            return best_para[:max_length] + "..."
+            return self._smart_truncate(best_para, max_length)
         return best_para
