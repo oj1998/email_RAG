@@ -50,6 +50,21 @@ from knowledge_gaps import detect_knowledge_gap, create_knowledge_gap_router, Kn
 
 from rate_limiter import gpt4_limiter, gpt35_limiter, embeddings_limiter, rate_limited_call
 
+import time
+
+# Add this to bubble_backend.py near the top with your other logging setup
+perf_logger = logging.getLogger("timing")
+perf_logger.setLevel(logging.INFO)
+perf_handler = logging.FileHandler("timing.log")
+perf_formatter = logging.Formatter('%(asctime)s - %(message)s')
+perf_handler.setFormatter(perf_formatter)
+perf_logger.addHandler(perf_handler)
+
+# Add this function for inline timing
+def log_time(section_name, start_time):
+    elapsed_ms = (time.time() - start_time) * 1000
+    perf_logger.info(f"{section_name}: {elapsed_ms:.2f}ms")
+
 concurrent_query_semaphore = asyncio.Semaphore(3)  # or whatever limit is appropriate
 
 query_router = APIRouter()
@@ -654,16 +669,17 @@ async def process_document_query(
 ) -> Dict[str, Any]:
     """Enhanced document query processing with improved source attribution"""
     async with concurrent_query_semaphore:
-        start_time = datetime.utcnow()
+        total_start = time.time()
         
         if not pool or not vector_store:
             raise HTTPException(status_code=503, detail="Service not fully initialized")
     
         try:
-
+            # Special query handling
             exact_question = "What construction aggregates can we use as an alternative to crushed stone?"
             if request.query.strip().lower() == exact_question.lower():
                 logger.info(f"Detected special aggregate query: '{request.query}'")
+                perf_logger.info(f"Special query detected - bypassing normal processing: {time.time() - total_start:.4f}s")
                 
                 # Return a special response format with markers
                 return {
@@ -685,14 +701,18 @@ async def process_document_query(
                     }
                 }
             
-            # Get question classification
+            # Question classification
+            classification_start = time.time()
             classification = await classifier.classify_question(
                 question=request.query,
                 conversation_context=conversation_context,
                 current_context=request.context.dict()
             )
+            classification_end = time.time()
+            perf_logger.info(f"Classification: {(classification_end - classification_start) * 1000:.2f}ms")
     
-            # Perform intent analysis
+            # Intent analysis
+            intent_start = time.time()
             intent_analyzer = SmartQueryIntentAnalyzer()
             intent_analysis = await rate_limited_call(
                 intent_analyzer.analyze,
@@ -700,8 +720,11 @@ async def process_document_query(
                 request.query, 
                 request.context.dict()
             )
+            intent_end = time.time()
+            perf_logger.info(f"Intent analysis: {(intent_end - intent_start) * 1000:.2f}ms")
     
             # Check for comparison queries (which we'll now route to variance analysis)
+            routing_start = time.time()
             is_comparison = False
             #if hasattr(classification, 'suggested_format') and classification.suggested_format:
                 #is_comparison = classification.suggested_format.get("is_comparison", False)
@@ -715,15 +738,23 @@ async def process_document_query(
             
             if is_comparison or classification.category == "COMPARISON" or variance_match:
                 logger.info(f"Routing to variance analysis because: is_comparison={is_comparison}, category={classification.category}, variance_match={variance_match}")
-                return await process_variance_query(
+                variance_start = time.time()
+                result = await process_variance_query(
                     request=request,
                     classification=classification,
                     vector_store=vector_store,
                     conversation_context=conversation_context,
                     intent_analysis=intent_analysis
                 )
+                variance_end = time.time()
+                perf_logger.info(f"Variance analysis: {(variance_end - variance_start) * 1000:.2f}ms")
+                perf_logger.info(f"Total document processing (variance): {(variance_end - total_start) * 1000:.2f}ms")
+                return result
+            routing_end = time.time()
+            perf_logger.info(f"Variance routing check: {(routing_end - routing_start) * 1000:.2f}ms")
             
             # Initialize enhanced response generator
+            generator_start = time.time()
             enhanced_source_handler = EnhancedSmartResponseGenerator(
                 llm=ChatOpenAI(
                     model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
@@ -733,22 +764,31 @@ async def process_document_query(
                 classifier=classifier,
                 min_confidence=0.6  # Adjustable threshold
             )
+            generator_end = time.time()
+            perf_logger.info(f"Initialize response generator: {(generator_end - generator_start) * 1000:.2f}ms")
             
             # Check if we need sources for this query
+            sources_check_start = time.time()
             needs_sources = await enhanced_source_handler.should_use_sources(
                 query=request.query,
                 classification=classification,
                 intent_analysis=intent_analysis
             )
+            sources_check_end = time.time()
+            perf_logger.info(f"Sources check: {(sources_check_end - sources_check_start) * 1000:.2f}ms")
             
             # Configure search based on classification and request
+            filter_start = time.time()
             metadata_filter = {}
             if request.document_ids:
                 metadata_filter["document_id"] = {"$in": request.document_ids}
             if request.metadata_filter:
                 metadata_filter.update(request.metadata_filter)
+            filter_end = time.time()
+            perf_logger.info(f"Metadata filter setup: {(filter_end - filter_start) * 1000:.2f}ms")
     
             # Initialize memory with conversation history
+            memory_start = time.time()
             memory = WeightedConversationMemory(
                 memory_key="chat_history",
                 return_messages=True,
@@ -763,8 +803,11 @@ async def process_document_query(
                     if isinstance(message, dict):
                         msg_type = HumanMessage if message.get("role") == "user" else AIMessage
                         memory.chat_memory.add_message(msg_type(content=message.get("content", "")))
+            memory_end = time.time()
+            perf_logger.info(f"Memory initialization: {(memory_end - memory_start) * 1000:.2f}ms")
     
             # Get relevant documents directly using the enhanced method
+            docs_start = time.time()
             if needs_sources:
                 documents = await enhanced_source_handler._get_relevant_documents(
                     query=request.query,
@@ -774,7 +817,11 @@ async def process_document_query(
                 )
             else:
                 documents = []
+            docs_end = time.time()
+            perf_logger.info(f"Document retrieval: {(docs_end - docs_start) * 1000:.2f}ms")
     
+            # Check document confidence and knowledge gaps
+            knowledge_start = time.time()
             retrieved_content_confidence = 0.0
             if documents:
                 # Average the semantic similarities if available
@@ -808,6 +855,8 @@ async def process_document_query(
                     context=request.context.dict() if hasattr(request.context, 'dict') else {},
                     pool=pool
                 )
+            knowledge_end = time.time()
+            perf_logger.info(f"Knowledge gap check: {(knowledge_end - knowledge_start) * 1000:.2f}ms")
             
             # Include knowledge gap information in the response metadata
             knowledge_gap_metadata = None
@@ -823,13 +872,16 @@ async def process_document_query(
     
             if knowledge_gap.is_gap:
                 # Generate a specialized "I don't know" response
-                start_gap_time = datetime.utcnow()
+                gap_response_start = time.time()
                 not_knowing_response = await generate_knowledge_gap_response(
                     query=request.query,
                     knowledge_gap=knowledge_gap,
                     classification=classification
                 )
-                processing_time = (datetime.utcnow() - start_gap_time).total_seconds()
+                gap_response_end = time.time()
+                processing_time = (gap_response_end - gap_response_start)
+                perf_logger.info(f"Knowledge gap response: {processing_time * 1000:.2f}ms")
+                perf_logger.info(f"Total document processing (knowledge gap): {(gap_response_end - total_start) * 1000:.2f}ms")
                 
                 # Return early with the specialized response
                 return {
@@ -850,6 +902,7 @@ async def process_document_query(
                 }
     
             # Initialize QA chain with appropriate model
+            chain_start = time.time()
             limiter = gpt4_limiter if classification.category == "SAFETY" else gpt35_limiter
     
             if documents:
@@ -860,13 +913,17 @@ async def process_document_query(
                 # Create a simple retriever from the documents
                 from langchain.retrievers import TimeWeightedVectorStoreRetriever
                 
+                retriever_start = time.time()
                 retriever = vector_store.as_retriever(
                     search_kwargs={
                         "k": len(documents),
                         "filter": metadata_filter if metadata_filter else None
                     }
                 )
+                retriever_end = time.time()
+                perf_logger.info(f"Retriever setup: {(retriever_end - retriever_start) * 1000:.2f}ms")
                 
+                qa_setup_start = time.time()
                 qa = ConversationalRetrievalChain.from_llm(
                     llm=ChatOpenAI(
                         model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
@@ -877,19 +934,25 @@ async def process_document_query(
                     return_source_documents=True,
                     verbose=True
                 )
+                qa_setup_end = time.time()
+                perf_logger.info(f"QA chain setup: {(qa_setup_end - qa_setup_start) * 1000:.2f}ms")
                 
                 # Define an async function that calls qa with rate limiting
                 async def execute_qa_with_rate_limit():
+                    qa_exec_start = time.time()
                     await limiter.acquire()
                     try:
                         # We still need to run in executor because qa is not async
-                        return await asyncio.get_event_loop().run_in_executor(
+                        result = await asyncio.get_event_loop().run_in_executor(
                             None, 
                             lambda: qa({
                                 "question": request.query,
                                 "chat_history": memory.chat_memory.messages
                             })
                         )
+                        qa_exec_end = time.time()
+                        perf_logger.info(f"QA execution: {(qa_exec_end - qa_exec_start) * 1000:.2f}ms")
+                        return result
                     finally:
                         limiter.release()
             
@@ -900,6 +963,7 @@ async def process_document_query(
                 source_documents = chain_response.get("source_documents", [])
             else:
                 # For queries that don't need sources
+                simple_qa_start = time.time()
                 simple_qa = ConversationalChain.from_llm(
                     llm=ChatOpenAI(
                         model_name="gpt-4" if classification.category == "SAFETY" else "gpt-3.5-turbo",
@@ -908,18 +972,24 @@ async def process_document_query(
                     memory=memory,
                     verbose=True
                 )
+                simple_qa_end = time.time()
+                perf_logger.info(f"Simple QA setup: {(simple_qa_end - simple_qa_start) * 1000:.2f}ms")
                 
                 # Define an async function for the simple_qa with rate limiting
                 async def execute_simple_qa_with_rate_limit():
+                    simple_exec_start = time.time()
                     await limiter.acquire()
                     try:
-                        return await asyncio.get_event_loop().run_in_executor(
+                        result = await asyncio.get_event_loop().run_in_executor(
                             None, 
                             lambda: simple_qa({
                                 "question": request.query,
                                 "chat_history": memory.chat_memory.messages
                             })
                         )
+                        simple_exec_end = time.time()
+                        perf_logger.info(f"Simple QA execution: {(simple_exec_end - simple_exec_start) * 1000:.2f}ms")
+                        return result
                     finally:
                         limiter.release()
                 
@@ -928,8 +998,11 @@ async def process_document_query(
                 
                 response_content = chain_response.get("answer", "No response generated")
                 source_documents = []
+            chain_end = time.time()
+            perf_logger.info(f"Chain processing: {(chain_end - chain_start) * 1000:.2f}ms")
     
             # Transform content based on classification and intent
+            transform_start = time.time()
             transformer = NLPTransformer()
             
             formatted_response, intent_analysis = await transformer.transform_content(
@@ -939,8 +1012,11 @@ async def process_document_query(
                 source_documents=source_documents,
                 classification=classification.dict()
             )
+            transform_end = time.time()
+            perf_logger.info(f"Content transformation: {(transform_end - transform_start) * 1000:.2f}ms")
     
             # If we're using sources, extract attributions with the enhanced method
+            attribution_start = time.time()
             source_attributions = []
             if needs_sources and source_documents:
                 source_attributions = await enhanced_source_handler._extract_attributions(
@@ -949,11 +1025,14 @@ async def process_document_query(
                     classification,
                     pool
                 )
+            attribution_end = time.time()
+            perf_logger.info(f"Attribution extraction: {(attribution_end - attribution_start) * 1000:.2f}ms")
     
             # Calculate processing time
             processing_time = (datetime.utcnow() - start_time).total_seconds()
             
             # Prepare sources for response
+            source_format_start = time.time()
             sources = []
             if needs_sources and source_attributions:
                 for attr in source_attributions:
@@ -991,8 +1070,11 @@ async def process_document_query(
             format_mapper = FormatMapper()
             category_format = format_mapper.get_format_for_category(classification.category)
             validation_errors = []
+            source_format_end = time.time()
+            perf_logger.info(f"Source formatting: {(source_format_end - source_format_start) * 1000:.2f}ms")
     
             # Prepare response
+            response_prep_start = time.time()
             response = {
                 "status": "success",
                 "answer": formatted_response,
@@ -1011,10 +1093,16 @@ async def process_document_query(
                     format_validation_errors=validation_errors if 'validation_errors' in locals() else []
                 ).dict()
             }
+            response_prep_end = time.time()
+            perf_logger.info(f"Response preparation: {(response_prep_end - response_prep_start) * 1000:.2f}ms")
     
+            total_end = time.time()
+            perf_logger.info(f"Total document processing: {(total_end - total_start) * 1000:.2f}ms")
             return response
     
         except Exception as e:
+            total_end = time.time()
+            perf_logger.info(f"Failed document processing: {(total_end - total_start) * 1000:.2f}ms (error: {str(e)})")
             logger.error(f"Error in document query processing: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -1046,22 +1134,29 @@ async def download_file(file_url: str) -> bytes:
 @query_router.post("/query")
 async def query_documents(request: QueryRequest):
     """Enhanced main query endpoint with conversation history and classification"""
+    total_start = time.time()
     try:
         # Load conversation history
+        history_start = time.time()
         conversation_context = await conversation_handler.load_conversation_history(
             conversation_id=request.conversation_id
         )
+        history_end = time.time()
+        perf_logger.info(f"Load conversation history: {(history_end - history_start) * 1000:.2f}ms")
         
         # Log the request details and routing decision factors
         logger.info(f"Processing query for conversation {request.conversation_id}: '{request.query}'")
         logger.info(f"Info sources: {request.info_sources}")
         
         # Make and log the routing decision
+        routing_start = time.time()
         use_email_processing = is_email_query(request)
         logger.info(f"Routing decision: {'EMAIL' if use_email_processing else 'DOCUMENT'} processing")
+        routing_end = time.time()
+        perf_logger.info(f"Routing decision: {(routing_end - routing_start) * 1000:.2f}ms")
         
         # Process query with context
-        # This is likely in your main query endpoint or in the query_documents function
+        processing_start = time.time()
         if use_email_processing:
             logger.info("Starting email query processing")
             response = await process_email_query(
@@ -1084,8 +1179,11 @@ async def query_documents(request: QueryRequest):
                 response["metadata"] = {}
             response["metadata"]["query_type"] = "document"
             logger.info("Document query processing completed successfully")
+        processing_end = time.time()
+        perf_logger.info(f"Query processing: {(processing_end - processing_start) * 1000:.2f}ms")
 
         # Save the interaction
+        save_start = time.time()
         await conversation_handler.save_conversation_turn(
             conversation_id=request.conversation_id,
             role='user',
@@ -1110,10 +1208,17 @@ async def query_documents(request: QueryRequest):
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
+        save_end = time.time()
+        perf_logger.info(f"Save interaction: {(save_end - save_start) * 1000:.2f}ms")
+        
+        total_end = time.time()
+        perf_logger.info(f"Total request: {(total_end - total_start) * 1000:.2f}ms")
         
         return response
             
     except Exception as e:
+        total_end = time.time()
+        perf_logger.info(f"Failed request: {(total_end - total_start) * 1000:.2f}ms (error: {str(e)})")
         logger.error(f"Error in query routing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
