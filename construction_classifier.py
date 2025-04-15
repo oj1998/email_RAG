@@ -15,6 +15,14 @@ import os
 # Set up enhanced logging
 logger = logging.getLogger(__name__)
 
+perf_logger = logging.getLogger("timing")
+perf_logger.setLevel(logging.INFO)
+if not any(isinstance(h, logging.FileHandler) for h in perf_logger.handlers):
+    perf_handler = logging.FileHandler("timing.log")
+    perf_formatter = logging.Formatter('%(asctime)s - %(message)s')
+    perf_handler.setFormatter(perf_formatter)
+    perf_logger.addHandler(perf_handler)
+
 # Configure a file handler for cost tracking
 cost_logger = logging.getLogger("cost_tracking")
 cost_logger.setLevel(logging.INFO)
