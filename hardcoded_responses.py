@@ -239,6 +239,174 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+# Contract Dispute Analysis Response
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(who|what|when|why).+(approved|approval|change|HVAC|system).+(Westside|project)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# HVAC System Change Dispute Analysis
+
+## Communication Timeline Analysis
+
+After reviewing all project communications, I've identified conflicting information regarding the HVAC system change on the Westside project.
+
+### Key Findings:
+* Original specification was clearly for Airflow 3000 model (James Rodriguez, April 1)
+* Supply chain issues were discussed in weekly meeting (Procore meeting minutes, April 5)
+* Alternative system (ThermalTech Pro) was proposed to Maria Chen, not James (April 6)
+* No formal change order was created or distributed
+* Final installation approval was given under time pressure without specific system confirmation
+
+### Contract Implications:
+According to Section 12.3 of the contract, substitutions require written approval from the original requester and proper documentation through a change order process.
+
+## Recommended Actions:
+1. Create retroactive change order documentation
+2. Conduct technical comparison of installed vs. specified system
+3. Negotiate cost adjustment based on documented benefits
+4. Revise approval protocols to prevent future issues
+""",
+            "classification": {
+                "category": "CONTRACT_DISPUTE",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "contract-doc-123",
+                    "title": "Westside Project Master Contract",
+                    "page": 87,
+                    "confidence": 0.95,
+                    "excerpt": "Section 12.3: All substitutions of specified materials, equipment, or systems must be approved in writing by the original requester and documented with a formal change order as specified in Section 8.2."
+                }
+            ],
+            "metadata": {
+                "category": "CONTRACT_DISPUTE_ANALYSIS",
+                "query_type": "document",
+                "special_query_details": {
+                    "type": "communication_analysis",
+                    "project": "Westside",
+                    "issue": "hvac_system_change"
+                },
+                "timeline_events": [
+                    {
+                        "id": "email-001",
+                        "date": "2025-04-01T09:23:15",
+                        "sender": "James Rodriguez",
+                        "recipient": "HVAC Contractors Inc.",
+                        "subject": "HVAC System Requirements for Westside Project",
+                        "content": "As per our discussions during the planning phase, please ensure the installed system meets the efficiency ratings specified in the contract. We need the Airflow 3000 model as agreed.",
+                        "system": "Outlook",
+                        "tags": ["requirements", "specifications"],
+                        "relevance": 0.95
+                    },
+                    {
+                        "id": "meeting-002",
+                        "date": "2025-04-05T14:30:00",
+                        "sender": "Project Meeting",
+                        "recipient": "All Team Members",
+                        "subject": "Weekly Progress Meeting - Minutes",
+                        "content": "During discussion of HVAC installation timeline, Sam mentioned potential supply chain issues with the Airflow 3000. Alternative options were discussed but no decision was made. Action item: James to follow up with HVAC Contractors about alternatives if needed.",
+                        "system": "Procore",
+                        "tags": ["meeting-minutes", "supply-issues"],
+                        "relevance": 0.88
+                    },
+                    {
+                        "id": "email-003",
+                        "date": "2025-04-06T11:42:53",
+                        "sender": "HVAC Contractors Inc.",
+                        "recipient": "Maria Chen",
+                        "subject": "RE: Westside Project - HVAC Options",
+                        "content": "Following yesterday's meeting, we're having trouble sourcing the Airflow 3000 within your timeline. We recommend the ThermalTech Pro which actually has better efficiency ratings and we can get it installed by the original deadline. It's a bit more expensive but a superior system. Let me know if you want to proceed with this option.",
+                        "system": "Outlook",
+                        "tags": ["alternative", "recommendation"],
+                        "relevance": 0.97
+                    },
+                    {
+                        "id": "chat-004",
+                        "date": "2025-04-06T15:17:22",
+                        "sender": "Maria Chen",
+                        "recipient": "HVAC Contractors Inc.",
+                        "subject": "Direct Message",
+                        "content": "The ThermalTech Pro sounds like a good alternative. If it's better quality and meets the deadline, it might be worth considering. Let me check with the team about the additional cost.",
+                        "system": "Teams",
+                        "tags": ["confirmation", "inquiry"],
+                        "relevance": 0.92
+                    },
+                    {
+                        "id": "document-005",
+                        "date": "2025-04-07T08:45:00",
+                        "sender": "System",
+                        "recipient": "All Users",
+                        "subject": "Westside Project - Daily Report",
+                        "content": "HVAC work scheduled to begin next week. All materials should be on site by Thursday according to contractor confirmation.",
+                        "system": "Procore",
+                        "tags": ["daily-report", "schedule"],
+                        "relevance": 0.75
+                    },
+                    {
+                        "id": "email-006",
+                        "date": "2025-04-09T16:03:42",
+                        "sender": "Maria Chen",
+                        "recipient": "Project Team",
+                        "subject": "Updates on Various Vendors",
+                        "content": "Several updates from today's vendor calls: ... [Multiple updates about different aspects] ... HVAC team mentioned they're proceeding with preparations and will be ready to start Monday.",
+                        "system": "Outlook",
+                        "tags": ["update", "multiple-topics"],
+                        "relevance": 0.68
+                    },
+                    {
+                        "id": "sms-007",
+                        "date": "2025-04-12T09:23:11",
+                        "sender": "Site Supervisor",
+                        "recipient": "Project Manager",
+                        "subject": "SMS Message",
+                        "content": "HVAC team arrived with ThermalTech Pro units. Different from what I expected but they said it was approved. Should I let them proceed with installation?",
+                        "system": "Text Message",
+                        "tags": ["urgent", "decision-needed"],
+                        "relevance": 0.99
+                    },
+                    {
+                        "id": "chat-008",
+                        "date": "2025-04-12T09:31:47",
+                        "sender": "Project Manager",
+                        "recipient": "Site Supervisor",
+                        "subject": "Teams Chat",
+                        "content": "If they're ready to go and it meets our specs, let them proceed. We can't afford delays on the HVAC installation as it's on the critical path.",
+                        "system": "Teams",
+                        "tags": ["approval", "schedule-priority"],
+                        "relevance": 0.99
+                    }
+                ],
+                "conflict_points": [
+                    {
+                        "description": "Original system specification clearly stated as Airflow 3000 in initial communication",
+                        "eventIds": ["email-001"],
+                        "severity": "medium"
+                    },
+                    {
+                        "description": "Alternative system (ThermalTech Pro) discussed with Maria Chen, not the original requester (James)",
+                        "eventIds": ["email-003", "chat-004"],
+                        "severity": "high"
+                    },
+                    {
+                        "description": "No formal change order documentation created or distributed to project team",
+                        "eventIds": ["email-006", "document-005"],
+                        "severity": "high"
+                    },
+                    {
+                        "description": "Ambiguous approval given for installation without specific system confirmation",
+                        "eventIds": ["sms-007", "chat-008"],
+                        "severity": "medium"
+                    }
+                ]
+            }
+        },
+        priority=70  # High priority but below emergency responses
+    )
+)
+
 # Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
