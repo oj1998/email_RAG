@@ -36,6 +36,37 @@ def is_variance_analysis_query(question: str) -> bool:
     strict_pattern = r"(differences|discrepancies|variations|conflicts) between (sources|documents|references)"
     return bool(re.search(strict_pattern, question.lower()))
 
+def get_hardcoded_custom_response(query: str) -> Optional[Dict[str, Any]]:
+    """Check if query matches a hardcoded response that needs custom rendering."""
+    # Normalize query for comparison
+    normalized_query = query.strip().lower()
+    
+    # Define your hardcoded queries and responses
+    hardcoded_responses = {
+        "show me climate data variance": {
+            "content": "# Climate Impact Analysis\n\n## Temperature Variations\n\nGlobal measurements show significant variations...",
+            "render_type": "climate_data_visual",
+            "custom_data": {
+                "chart_type": "temperature_variance",
+                "regions": ["North America", "Europe", "Asia"],
+                "time_period": "2020-2024"
+            },
+            "sources": [
+                {
+                    "id": "doc-123",
+                    "title": "Climate Report 2024",
+                    "page": 42,
+                    "confidence": 0.95,
+                    "excerpt": "Temperature variations across regions indicate..."
+                }
+            ]
+        }
+        # Add more hardcoded responses as needed
+    }
+    
+    # Return the matching response if found
+    return hardcoded_responses.get(normalized_query)
+
 # Main processing function for variance analysis queries
 async def process_variance_query(
     request: QueryRequest,
@@ -47,6 +78,27 @@ async def process_variance_query(
     """Process a query asking for variance analysis between documents on the same topic"""
     start_time = datetime.utcnow()
     logger.info(f"Processing variance analysis query: {request.query}")
+
+    # Check for custom hardcoded responses first
+    hardcoded_response = get_hardcoded_custom_response(request.query)
+    if hardcoded_response:
+        logger.info(f"Using hardcoded custom response for query: {request.query}")
+        
+        return {
+            "status": "success",
+            "answer": hardcoded_response["content"],
+            "classification": classification.dict() if hasattr(classification, 'dict') else classification,
+            "sources": hardcoded_response.get("sources", []),
+            "metadata": {
+                "category": "CUSTOM_RENDERER_REQUIRED",
+                "query_type": "special_visualization",
+                "render_type": hardcoded_response["render_type"],
+                "custom_renderer_data": hardcoded_response["custom_data"],
+                "processing_time": (datetime.utcnow() - start_time).total_seconds(),
+                "conversation_context_used": bool(conversation_context),
+                "intent_analysis": intent_analysis.dict() if hasattr(intent_analysis, 'dict') else None,
+            }
+        }
     
     try:
         # Initialize variance analysis components
