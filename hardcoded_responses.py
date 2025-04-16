@@ -169,6 +169,76 @@ Always verify compliance with local building codes and structural requirements b
     )
 )
 
+# StormShield Installation Response
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(stormshield|storm shield).+(install|requirements|facade|west|commercial|rain)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# StormShield Installation Standards
+
+## Key Requirements for West-Facing Commercial Facades
+
+### Temperature and Environmental Requirements
+* Application temperature must be between 45-85°F with surface moisture reading below 12%
+* Do not apply if rain is expected within 48 hours
+
+### Proper Installation Sequence
+* Primary membrane must cure for 24 hours before secondary layer application
+* West-facing installations require double-layer application at seams with 6" overlap (increased from 4" in previous standard)
+* Use BlueBond-X adhesive formula for any installation within 15 miles of saltwater
+
+### Quality Assurance
+* Schedule inspection after installation
+* Validate installation meets warranty requirements
+
+### Common Installation Errors to Avoid
+* Insufficient overlap at seams (most common failure point)
+* Using standard adhesive in coastal applications
+* Applying second layer before primary membrane has fully cured
+* Improper trowel technique leading to uneven application""",
+            "classification": {
+                "category": "PROPRIETARY_INSTALLATION",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "storm-shield-manual-v2025",
+                    "title": "StormShield Installation Guide (March 2025)",
+                    "page": 42,
+                    "confidence": 0.95,
+                    "excerpt": "West-facing installations require double-layer application at seams with 6\" overlap (increased from 4\" in previous standard). Application temperature must be between 45-85°F with surface moisture reading below 12%. Primary membrane must cure for 24 hours before secondary layer application."
+                },
+                {
+                    "id": "qa-memo-218",
+                    "title": "Quality Assurance Memo #218",
+                    "page": 3,
+                    "confidence": 0.92,
+                    "excerpt": "BlueBond-X formula is now required for any installation within 15 miles of saltwater. This update supersedes previous adhesive specifications for coastal applications."
+                }
+            ],
+            "metadata": {
+                "category": "PROPRIETARY_INSTALLATION",
+                "query_type": "document",
+                "special_query_details": {
+                    "type": "installation_guide",
+                    "product": "StormShield",
+                    "installation_type": "west_facing_facade"
+                },
+                "context": {
+                    "weather": {
+                        "currentTemp": "52°F",
+                        "forecast": "Rain expected in 48 hours",
+                        "humidity": "68%"
+                    }
+                }
+            }
+        },
+        priority=80  # High priority but below emergency responses
+    )
+)
+
 # Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
