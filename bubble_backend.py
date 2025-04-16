@@ -701,6 +701,39 @@ async def process_document_query(
                         }
                     }
                 }
+
+            if request.query.strip().lower() == "show me climate data variance":
+                logger.info(f"Detected custom climate data variance query: '{request.query}'")
+                perf_logger.info(f"Special visualization query detected - bypassing normal processing: {time.time() - total_start:.4f}s")
+                
+                # Return a special response for the custom visualization
+                return {
+                    "status": "success",
+                    "answer": "# Climate Impact Analysis\n\n## Temperature Variations\n\nGlobal measurements show significant variations...",
+                    "classification": {
+                        "category": "CLIMATE_DATA",
+                        "confidence": 1.0
+                    },
+                    "sources": [
+                        {
+                            "id": "doc-123",
+                            "title": "Climate Report 2024",
+                            "page": 42,
+                            "confidence": 0.95,
+                            "excerpt": "Temperature variations across regions indicate..."
+                        }
+                    ],
+                    "metadata": {
+                        "category": "CUSTOM_RENDERER_REQUIRED",
+                        "query_type": "special_visualization",
+                        "render_type": "climate_data_visual",
+                        "custom_renderer_data": {
+                            "chart_type": "temperature_variance",
+                            "regions": ["North America", "Europe", "Asia"],
+                            "time_period": "2020-2024"
+                        }
+                    }
+                }
             
             # Question classification
             classification_start = time.time()
