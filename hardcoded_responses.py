@@ -126,11 +126,13 @@ Different climate models project varying outcomes for certain regions, particula
     )
 )
 
+# Replace your existing Construction Aggregates Alternative with this more flexible version
+
 # Construction Aggregates Alternative
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern="What construction aggregates can we use as an alternative to crushed stone?",
-        is_regex=False,
+        query_pattern=r"(alternative|replacement|substitute|other).+(construction aggregate|aggregates|crushed stone|stone aggregate)",
+        is_regex=True,
         response_data={
             "status": "success",
             "answer": """# Alternative Construction Aggregates
@@ -161,11 +163,12 @@ Always verify compliance with local building codes and structural requirements b
                 "is_special_aggregate_query": True,
                 "special_query_details": {
                     "type": "alternative_aggregates",
-                    "is_exact_match": True
+                    "is_exact_match": False
                 }
             }
         },
-        exact_match=True
+        exact_match=False,
+        priority=60  # Adjust priority as needed
     )
 )
 
