@@ -506,34 +506,38 @@ HARDCODED_RESPONSES.append(
 # Roll Forming Machine Troubleshooting Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(roll forming|roll former|forming machine).+(troubleshoot|issue|problem|error|inconsistent|thickness|edge|not working)",
+        query_pattern=r"(roll form|roll former|forming machine|roll forming|formed edge|material thickness).*(troubleshoot|issue|problem|error|inconsistent|thickness|edge|not working|help|fix)",
         is_regex=True,
         response_data={
             "status": "success",
-            "answer": """# Roll Forming Machine Troubleshooting Guide
+            "answer": """# Field Service Diagnostic Guide: RF-350 Series
+### Customer Issue: Edge Thickness Variation
 
-## Common Causes of Edge Thickness Variation
+## Initial Assessment 
+Before opening any panels, verify with the customer:
+- When the issue first appeared (after material change, maintenance, etc.)
+- Whether the issue is consistent or intermittent
+- If any recent maintenance has been performed on the machine
+- If they have documentation of current material specifications
 
-### Roller Alignment Issues
-- Misaligned entry guide rollers are the most common cause (42% of cases)
-- Wear on forming station bearings can create uneven pressure
-- Sequential station misalignment causing cumulative error
+## Service Checklist
+Perform standard safety lockout/tagout procedure before any mechanical inspection. Document all findings in the service report for warranty coverage.
 
-### Pressure Setting Problems
-- Incorrect pressure settings for material thickness
-- Asymmetrical pressure between left/right forming stations
-- Pressure drift due to hydraulic system wear or leaks
+## Common Root Causes
+Based on recent service data from similar installations, probable causes include:
+- Entry roller misalignment (42% of cases)
+- Incorrect pressure settings for material gauge (31%)
+- Material property inconsistencies (18%)
+- Calibration drift on hydraulic sensors (9%)
 
-### Material Property Variations
-- Inconsistent incoming material thickness
-- Varying hardness or yield strength across coil width
-- Residual stress patterns from prior processing
-  
-## Diagnostic Approach
-Always start with the entry rollers and work sequentially through the machine. Check alignment, then pressure settings, then material properties. Document all measurements for future reference.
+## Required Service Tools
+- Alignment laser kit (PN: ALK-350)
+- Calibrated feeler gauge set
+- Digital torque wrench (40-80Nm)
+- Pressure test kit with digital gauge
+- Service tablet with latest firmware
 
-## Safety Precautions
-Ensure machine is properly locked out before any mechanical inspection or adjustment. Use appropriate PPE including gloves when handling material edges.""",
+Follow each diagnostic path carefully. If multiple issues are found, document all findings for the customer before making adjustments.""",
             "classification": {
                 "category": "ROLL_FORMING_TROUBLESHOOTING",
                 "confidence": 1.0
@@ -552,6 +556,13 @@ Ensure machine is properly locked out before any mechanical inspection or adjust
                     "page": 3,
                     "confidence": 0.92,
                     "excerpt": "For models produced between 2023-2024, verify the pressure sensors on forming stations 2-4 have been calibrated according to procedure TB-RF350-42. Uncalibrated sensors are responsible for 27% of reported edge quality issues."
+                },
+                {
+                    "id": "service-bulletin-2025-03",
+                    "title": "Field Service Bulletin: Edge Quality Issues",
+                    "page": 1,
+                    "confidence": 0.98,
+                    "excerpt": "All field technicians must document pre-adjustment measurements for warranty claims. Use service tablet to photograph alignment readings before making any adjustments."
                 }
             ],
             "metadata": {
@@ -559,17 +570,25 @@ Ensure machine is properly locked out before any mechanical inspection or adjust
                 "query_type": "troubleshooting",
                 "render_type": "roll_forming_troubleshooter",
                 "machine_model": "RF-350",
-                "issue_description": "Inconsistent material thickness at edges after forming process",
-                "context": {
-                    "machine_details": {
+                "issue_description": "Inconsistent material thickness at edges - Customer experiencing quality rejections",
+                "service_context": {
+                    "customer_machine": {
                         "model": "RF-350",
                         "serial": "RF35-2024-1285",
-                        "installation_date": "2024-01-15"
+                        "installation_date": "2024-01-15",
+                        "warranty_status": "Active",
+                        "last_service": "2025-03-12"
+                    },
+                    "customer_info": {
+                        "company": "Precision Metals Inc.",
+                        "location": "Cincinnati",
+                        "issue_priority": "High - Production Impacted"
                     }
                 }
             }
         },
-        priority=75  # High priority
+        priority=75,  # High priority
+        exact_match=False
     )
 )
 
