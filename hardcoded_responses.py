@@ -503,6 +503,76 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+# Roll Forming Machine Troubleshooting Response
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(roll forming|roll former|forming machine).+(troubleshoot|issue|problem|error|inconsistent|thickness|edge|not working)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Roll Forming Machine Troubleshooting Guide
+
+## Common Causes of Edge Thickness Variation
+
+### Roller Alignment Issues
+- Misaligned entry guide rollers are the most common cause (42% of cases)
+- Wear on forming station bearings can create uneven pressure
+- Sequential station misalignment causing cumulative error
+
+### Pressure Setting Problems
+- Incorrect pressure settings for material thickness
+- Asymmetrical pressure between left/right forming stations
+- Pressure drift due to hydraulic system wear or leaks
+
+### Material Property Variations
+- Inconsistent incoming material thickness
+- Varying hardness or yield strength across coil width
+- Residual stress patterns from prior processing
+  
+## Diagnostic Approach
+Always start with the entry rollers and work sequentially through the machine. Check alignment, then pressure settings, then material properties. Document all measurements for future reference.
+
+## Safety Precautions
+Ensure machine is properly locked out before any mechanical inspection or adjustment. Use appropriate PPE including gloves when handling material edges.""",
+            "classification": {
+                "category": "ROLL_FORMING_TROUBLESHOOTING",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "rf-manual-2025",
+                    "title": "RF-350 Roll Forming Machine Technical Manual",
+                    "page": 87,
+                    "confidence": 0.95,
+                    "excerpt": "When troubleshooting inconsistent material thickness at edges, always begin by checking entry roller alignment. Misalignment of 0.2mm or greater can cause significant thickness variation at formed edges."
+                },
+                {
+                    "id": "tech-bulletin-42",
+                    "title": "Technical Bulletin: Edge Formation Quality",
+                    "page": 3,
+                    "confidence": 0.92,
+                    "excerpt": "For models produced between 2023-2024, verify the pressure sensors on forming stations 2-4 have been calibrated according to procedure TB-RF350-42. Uncalibrated sensors are responsible for 27% of reported edge quality issues."
+                }
+            ],
+            "metadata": {
+                "category": "ROLL_FORMING_TROUBLESHOOTING",
+                "query_type": "troubleshooting",
+                "render_type": "roll_forming_troubleshooter",
+                "machine_model": "RF-350",
+                "issue_description": "Inconsistent material thickness at edges after forming process",
+                "context": {
+                    "machine_details": {
+                        "model": "RF-350",
+                        "serial": "RF35-2024-1285",
+                        "installation_date": "2024-01-15"
+                    }
+                }
+            }
+        },
+        priority=75  # High priority
+    )
+)
+
 # Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
