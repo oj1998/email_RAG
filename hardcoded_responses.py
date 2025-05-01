@@ -592,6 +592,82 @@ Follow each diagnostic path carefully. If multiple issues are found, document al
     )
 )
 
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(roll former|roll forming machine|forming machine).*(assembly|build|construct|assemble|put together|installation|setup)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Roll Forming Machine Assembly Guide
+
+## Pre-Assembly Requirements
+Before beginning assembly, verify all parts have been received and match the bill of materials. Check for any shipping damage. Ensure assembly area meets space requirements (minimum 10m x 6m clear floor space).
+
+## Main Assembly Sequences
+The RF-350 roll forming machine assembly is divided into these primary subassemblies:
+- Entry guide and shaft assembly
+- Drive system installation
+- Forming station setup (varies by profile configuration)
+- Exit and cutoff mechanism assembly
+- Control system wiring and setup
+
+## Critical Assembly Points
+- All shaft alignments must be within 0.05mm tolerance
+- Bearing installation requires induction heating (80-120°C)
+- Torque specifications must be followed exactly
+- Roller gaps must be set according to profile specification drawings
+- Lubrication ports must be properly aligned before final assembly
+
+## Quality Control
+Each subassembly requires quality verification before proceeding to the next step. Document all measurements, alignments, and torque values in the work order paperwork.""",
+            "classification": {
+                "category": "ROLL_FORMER_ASSEMBLY",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "rf-manual-2025",
+                    "title": "RF-350 Roll Forming Machine Assembly Manual",
+                    "page": 12,
+                    "confidence": 0.95,
+                    "excerpt": "The assembly process requires precision alignment of all components. Tolerances tighter than 0.05mm must be maintained for proper machine operation. Always follow torque specifications to prevent premature component failure."
+                },
+                {
+                    "id": "rf-training-guide",
+                    "title": "Roll Former Assembly Training Guidelines",
+                    "page": 5,
+                    "confidence": 0.92,
+                    "excerpt": "Bearing installation is critical to machine performance. Use the induction heater to expand bearings for installation. Never exceed 120°C to avoid damaging bearing seals. Always measure bearing temperature before installation."
+                },
+                {
+                    "id": "rf-qc-procedures",
+                    "title": "Quality Control Procedures for Roll Former Assembly",
+                    "page": 8,
+                    "confidence": 0.94,
+                    "excerpt": "Document all critical measurements during assembly, including shaft alignments, bearing clearances, and roller gaps. These measurements must be recorded on the quality control checklist and included with the machine documentation package."
+                }
+            ],
+            "metadata": {
+                "category": "ROLL_FORMER_ASSEMBLY",
+                "query_type": "assembly_guide",
+                "render_type": "roll_former_assembly_navigator",
+                "machine_model": "RF-350",
+                "work_order": "WO-2025-1854",
+                "customer_name": "Precision Metals Inc.",
+                "assembly_station": "Station #4 - Drive Assembly",
+                "assembly_context": {
+                    "machine_details": {
+                        "model": "RF-350",
+                        "type": "Commercial Grade Roll Former",
+                        "production_date": "2025-04-15"
+                    }
+                }
+            }
+        },
+        priority=75  # High priority
+    )
+)
+
 # Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
