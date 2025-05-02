@@ -592,19 +592,21 @@ Follow each diagnostic path carefully. If multiple issues are found, document al
     )
 )
 
+# Roll Forming Machine Assembly Guide - Scotpanel
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(roll former|roll forming machine|forming machine).*(assembly|build|construct|assemble|put together|installation|setup)",
+        # Expanded pattern to catch more variations of questions about assembly
+        query_pattern=r"(scotpanel|roll form|roll former|forming machine|panel former|metal former).*(assembly|build|construct|assemble|put together|installation|setup|guide|manual|instructions|procedure|steps|how to|align)",
         is_regex=True,
         response_data={
             "status": "success",
-            "answer": """# Roll Forming Machine Assembly Guide
+            "answer": """# Scotpanel Roll Forming Machine Assembly Guide
 
 ## Pre-Assembly Requirements
 Before beginning assembly, verify all parts have been received and match the bill of materials. Check for any shipping damage. Ensure assembly area meets space requirements (minimum 10m x 6m clear floor space).
 
 ## Main Assembly Sequences
-The RF-350 roll forming machine assembly is divided into these primary subassemblies:
+The Scotpanel roll forming machine assembly is divided into these primary subassemblies:
 - Entry guide and shaft assembly
 - Drive system installation
 - Forming station setup (varies by profile configuration)
@@ -627,7 +629,7 @@ Each subassembly requires quality verification before proceeding to the next ste
             "sources": [
                 {
                     "id": "rf-manual-2025",
-                    "title": "RF-350 Roll Forming Machine Assembly Manual",
+                    "title": "Scotpanel Roll Forming Machine Assembly Manual",
                     "page": 12,
                     "confidence": 0.95,
                     "excerpt": "The assembly process requires precision alignment of all components. Tolerances tighter than 0.05mm must be maintained for proper machine operation. Always follow torque specifications to prevent premature component failure."
@@ -651,20 +653,82 @@ Each subassembly requires quality verification before proceeding to the next ste
                 "category": "ROLL_FORMER_ASSEMBLY",
                 "query_type": "assembly_guide",
                 "render_type": "roll_former_assembly_navigator",
-                "machine_model": "RF-350",
+                "machine_model": "Scotpanel",
                 "work_order": "WO-2025-1854",
                 "customer_name": "Precision Metals Inc.",
                 "assembly_station": "Station #4 - Drive Assembly",
                 "assembly_context": {
                     "machine_details": {
-                        "model": "RF-350",
+                        "model": "Scotpanel",
                         "type": "Commercial Grade Roll Former",
                         "production_date": "2025-04-15"
                     }
                 }
             }
         },
-        priority=75  # High priority
+        priority=75,  # High priority
+        exact_match=False  # Allow for partial matches to increase flexibility
+    )
+)
+
+# Specific entry for bearing alignment questions - added for more detailed matching
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(align|alignment|installing|setup|procedure|how|what).*(bearing|bearings|shaft|entry shaft|drive).*(scotpanel|roll form|roll former|panel form)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Entry Shaft Bearing Alignment Procedure for Scotpanel
+
+This comprehensive guide provides step-by-step instructions for aligning entry shaft bearings on Scotpanel roll formers, ensuring proper tolerance and optimal performance.
+
+## Overview
+Proper bearing alignment is critical to achieving consistent material forming. This procedure includes preparation, installation, verification, and final testing to ensure your roll former operates within specifications.
+
+## Key Points
+- Complete procedure includes 10 detailed steps
+- Critical measurements must be documented
+- Special tools required from calibrated tools cabinet
+- Recent updates to bearing specifications (March 2025)""",
+            "classification": {
+                "category": "ROLL_FORMER_ASSEMBLY",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "16638744-42de-4393-bdf6-60e7f68762df",
+                    "title": "Scotpanel Bearing Alignment Procedure",
+                    "page": 12,
+                    "confidence": 0.98,
+                    "excerpt": "Entry shaft bearing alignment is critical to machine performance. Follow this procedure carefully to ensure proper alignment within specified tolerances."
+                },
+                {
+                    "id": "1f7e29e3-a8ee-40a4-b481-4407dc38a649",
+                    "title": "Scotpanel Troubleshooting Guide",
+                    "page": 25,
+                    "confidence": 0.85,
+                    "excerpt": "Many material forming issues can be traced to improper bearing alignment. Verify alignment per procedure in maintenance manual before addressing other potential causes."
+                }
+            ],
+            "metadata": {
+                "category": "ROLL_FORMER_ASSEMBLY",
+                "query_type": "assembly_guide",
+                "render_type": "roll_former_assembly_navigator",
+                "machine_model": "Scotpanel",
+                "work_order": "WO-2025-1854",
+                "customer_name": "Precision Metals Inc.",
+                "assembly_station": "Station #4 - Drive Assembly",
+                "assembly_context": {
+                    "machine_details": {
+                        "model": "Scotpanel",
+                        "type": "Commercial Grade Roll Former",
+                        "production_date": "2025-04-15"
+                    }
+                }
+            }
+        },
+        priority=85,  # Higher priority than general assembly questions
+        exact_match=False  # Allow for partial matches to increase flexibility
     )
 )
 
