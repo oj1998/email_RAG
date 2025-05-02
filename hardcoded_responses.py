@@ -506,11 +506,11 @@ HARDCODED_RESPONSES.append(
 # Roll Forming Machine Troubleshooting Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(roll form|roll former|forming machine|roll forming|formed edge|material thickness).*(troubleshoot|issue|problem|error|inconsistent|thickness|edge|not working|help|fix)",
+        query_pattern=r"(scotpanel|roll form|roll former|forming machine|roll forming|formed edge|material thickness).*(troubleshoot|issue|problem|error|inconsistent|thickness|edge|not working|help|fix)",
         is_regex=True,
         response_data={
             "status": "success",
-            "answer": """# Field Service Diagnostic Guide: RF-350 Series
+            "answer": """# Field Service Diagnostic Guide: Scotpanel Series
 ### Customer Issue: Edge Thickness Variation
 
 ## Initial Assessment 
@@ -531,7 +531,7 @@ Based on recent service data from similar installations, probable causes include
 - Calibration drift on hydraulic sensors (9%)
 
 ## Required Service Tools
-- Alignment laser kit (PN: ALK-350)
+- Alignment laser kit (PN: ALK-SP100)
 - Calibrated feeler gauge set
 - Digital torque wrench (40-80Nm)
 - Pressure test kit with digital gauge
@@ -545,7 +545,7 @@ Follow each diagnostic path carefully. If multiple issues are found, document al
             "sources": [
                 {
                     "id": "rf-manual-2025",
-                    "title": "RF-350 Roll Forming Machine Technical Manual",
+                    "title": "Scotpanel Roll Forming Machine Technical Manual",
                     "page": 87,
                     "confidence": 0.95,
                     "excerpt": "When troubleshooting inconsistent material thickness at edges, always begin by checking entry roller alignment. Misalignment of 0.2mm or greater can cause significant thickness variation at formed edges."
@@ -555,7 +555,7 @@ Follow each diagnostic path carefully. If multiple issues are found, document al
                     "title": "Technical Bulletin: Edge Formation Quality",
                     "page": 3,
                     "confidence": 0.92,
-                    "excerpt": "For models produced between 2023-2024, verify the pressure sensors on forming stations 2-4 have been calibrated according to procedure TB-RF350-42. Uncalibrated sensors are responsible for 27% of reported edge quality issues."
+                    "excerpt": "For models produced between 2023-2024, verify the pressure sensors on forming stations 2-4 have been calibrated according to procedure TB-SP100-42. Uncalibrated sensors are responsible for 27% of reported edge quality issues."
                 },
                 {
                     "id": "service-bulletin-2025-03",
@@ -569,12 +569,12 @@ Follow each diagnostic path carefully. If multiple issues are found, document al
                 "category": "ROLL_FORMING_TROUBLESHOOTING",
                 "query_type": "troubleshooting",
                 "render_type": "roll_forming_troubleshooter",
-                "machine_model": "RF-350",
+                "machine_model": "Scotpanel",
                 "issue_description": "Inconsistent material thickness at edges - Customer experiencing quality rejections",
                 "service_context": {
                     "customer_machine": {
-                        "model": "RF-350",
-                        "serial": "RF35-2024-1285",
+                        "model": "Scotpanel",
+                        "serial": "SP-2024-1285",
                         "installation_date": "2024-01-15",
                         "warranty_status": "Active",
                         "last_service": "2025-03-12"
