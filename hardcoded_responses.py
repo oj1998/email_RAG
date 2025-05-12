@@ -873,7 +873,7 @@ When crossing under highways, additional specifications apply:
             },
             "sources": [
                 {
-                    "id": "YOUR-DRILLING-MANUAL-DOC-ID",  # REPLACE WITH ACTUAL ID
+                    "id": "1b2e9216-1334-4fa7-92d7-dec270712958",  # REPLACE WITH ACTUAL ID
                     "title": "Directional Drilling Technical Manual",
                     "page": 23,
                     "confidence": 0.97,
@@ -905,6 +905,136 @@ When crossing under highways, additional specifications apply:
             }
         },
         priority=90,  # High priority
+        exact_match=False
+    )
+)
+
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(consideration|requirement|challenge|procedure|guideline|what|how).*(aerial|fiber|installation|deploy).*(rural|remote|mountain|difficult terrain|challenging terrain)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Aerial Fiber Installation in Mountainous Rural Areas
+
+## Terrain-Specific Considerations
+1. **Access Road Limitations:** Many rural mountain areas lack proper roads - use tracked vehicles, ATVs, or helicopter support for equipment transport
+2. **Slope Stability:** Assess soil conditions and erosion potential before setting poles on steep grades
+3. **Weather Windows:** Mountain weather changes rapidly - monitor forecasts and plan for sudden storms
+4. **Wildlife Corridors:** Avoid disrupting migration paths and nesting areas during installation
+
+## Equipment Requirements for Remote Areas
+* **Specialized Vehicles:** Tracked bucket trucks, all-terrain digger derricks
+* **Portable Power:** Generator sets (minimum 25kW) for splicing equipment
+* **Communication Equipment:** Satellite phones for areas without cell coverage
+* **Emergency Supplies:** First aid, survival gear, extra food/water for crew
+
+## Installation Best Practices
+1. **Pole Setting on Slopes:**
+   - Increase embedment depth by 10% for every 10 degrees of slope
+   - Use crushed rock backfill for drainage on uphill side
+   - Install guy wires at 45-degree angles perpendicular to slope
+   - Consider rock anchors in lieu of traditional anchors
+
+2. **Span Lengths in Mountainous Terrain:**
+   - Reduce standard spans by 20% in areas with high wind exposure
+   - Maximum 200-foot spans across valleys (vs. 300-foot standard)
+   - Use heavy-duty suspension clamps at all angle points
+   - Install vibration dampers on spans exceeding 150 feet
+
+3. **Clearance Requirements:**
+   - Maintain 25-foot minimum clearance over mountain roads (vs. 18-foot standard)
+   - Allow for 5-foot snow accumulation in clearance calculations
+   - Increase tree trimming zone to 15 feet each side in fire-prone areas
+   - Consider wildlife flight paths when determining cable height
+
+## Weather-Related Considerations
+* **Winter Installation Challenges:**
+  - Fiber becomes brittle below -20°C; warm cable before pulling
+  - Ice loading can triple cable weight; use high-strength messenger wire
+  - Snow accumulation affects access roads; maintain alternate routes
+  - Shortened daylight hours require efficient crew scheduling
+
+* **Wind Factors:**
+  - Mountain ridges experience 2-3x valley wind speeds
+  - Install wind dampeners on all spans exposed to prevailing winds
+  - Use armor-wrapped cable in high-wind zones
+  - Consider underground installation for extremely exposed areas
+
+## Safety Protocols for Remote Work
+1. **Crew Requirements:**
+   - Minimum 3-person crews for mountain work (vs. 2-person standard)
+   - Wilderness first aid certification for at least one crew member
+   - Daily check-in procedures with base operations
+   - Emergency evacuation plan for each work site
+
+2. **Equipment Safety:**
+   - Inspect climbing gear daily in harsh conditions
+   - Use fall restraint (not just fall arrest) on steep slopes
+   - Carry emergency descent devices for aerial rescue
+   - Maintain tire chains and recovery equipment on all vehicles
+
+## Material Logistics
+* **Supply Chain Management:**
+  - Pre-position materials at staging areas before winter
+  - Use weatherproof storage containers for sensitive equipment
+  - Maintain 20% extra materials for weather-related delays
+  - Coordinate with local suppliers for emergency needs
+
+* **Cable Management:**
+  - Store cable reels in climate-controlled environment when possible
+  - Use smaller reels (2,500 feet vs. 5,000 feet) for easier transport
+  - Allow cable to acclimate to ambient temperature before installation
+  - Document all cable serial numbers and test results""",
+            "classification": {
+                "category": "RURAL_INSTALLATION",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "dce73f2d-a162-4575-bea4-248d3f76ef44",  # REPLACE WITH ACTUAL ID
+                    "title": "Rural Fiber Deployment Guide - Mountainous Regions",
+                    "page": 67,
+                    "confidence": 0.96,
+                    "excerpt": "Mountain installations require specialized equipment and procedures. Reduce standard span lengths by 20% in high-wind areas, with maximum 200-foot spans across valleys. Increase pole embedment depth by 10% for every 10 degrees of slope to ensure stability."
+                },
+                {
+                    "id": "YOUR-TERRAIN-CHALLENGES-DOC-ID",  # REPLACE WITH ACTUAL ID
+                    "title": "Challenging Terrain Installation Manual",
+                    "page": 42,
+                    "confidence": 0.93,
+                    "excerpt": "Wildlife corridor considerations are critical in rural installations. Avoid disrupting migration paths and nesting areas. Maintain 15-foot clearance zones in fire-prone areas and consider underground installation for extremely exposed mountain ridge locations."
+                }
+            ],
+            "metadata": {
+                "category": "RURAL_INSTALLATION",
+                "query_type": "document",
+                "render_type": "rural_installation_guide",
+                "terrain_context": {
+                    "terrain_type": "mountainous",
+                    "elevation_range": "2,000-8,000 feet",
+                    "access_difficulty": "high",
+                    "weather_severity": "extreme"
+                },
+                "project_insights": {
+                    "similar_projects": [
+                        {
+                            "name": "Blue Ridge Fiber Extension",
+                            "completion": "2024-11",
+                            "challenges": ["45-degree slopes", "wildlife protection zones", "winter storm delays"],
+                            "lessons_learned": ["Pre-position materials by October", "Use helicopter for ridge-top poles", "Partner with local contractors"]
+                        },
+                        {
+                            "name": "Rocky Mountain Rural Connect",
+                            "completion": "2024-08",
+                            "challenges": ["Rock drilling required", "Limited access roads", "High altitude work"],
+                            "lessons_learned": ["Track vehicles essential", "Account for altitude sickness", "Extra generators needed"]
+                        }
+                    ]
+                }
+            }
+        },
+        priority=85,  # High priority
         exact_match=False
     )
 )
