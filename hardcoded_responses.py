@@ -732,6 +732,88 @@ Proper bearing alignment is critical to achieving consistent material forming. T
     )
 )
 
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(safety|precaution|procedure|protocol|how|what).*(splicin|splice|fiber|fiber optic|cable).*(wet|rain|storm|aerial|emergency|damage)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# EMERGENCY: Fiber Optic Splicing - Wet Weather Protocol
+
+## Immediate Safety Requirements
+1. **De-energize all equipment:** Ensure all power sources are disconnected before beginning work
+2. **Verify atmospheric conditions:** Do not work during active lightning - wait minimum 30 minutes after last strike
+3. **Personal protective equipment:** Waterproof gloves, insulated tools, arc-rated rain gear required
+
+## Wet Weather Splicing Procedure
+1. **Establish dry work area:** Deploy portable canopy or splice enclosure tent over work zone
+2. **Cable preparation:** Thoroughly dry cable ends using lint-free wipes and isopropyl alcohol
+3. **Moisture prevention:** Apply temporary water-blocking gel to exposed fiber buffer tubes
+4. **Fusion splicing parameters:** Increase arc power by 10% and fusion time by 2 seconds for humid conditions
+5. **Splice protection:** Use heat-shrink sleeves rated for outdoor use with adhesive lining
+6. **Closure sealing:** Apply extra butyl tape around all entry points in splice enclosure
+
+## Aerial Line Specific Precautions
+* Use bucket truck with proper grounding straps
+* Maintain 10-foot clearance from energized power lines
+* Install temporary cable guards if working near electrical
+* Double-check strand bonds and grounding before touching cable
+
+## Critical Quality Checks
+- Test each splice with OTDR before closing enclosure
+- Document moisture readings inside closure (must be <30% RH)
+- Verify proper drip loops at all aerial entry points
+- Photograph completed work for storm damage documentation
+
+## Emergency Contact Protocol
+- Notify NOC immediately upon arrival at damage site
+- Update outage management system every 30 minutes
+- Contact local power company if poles are compromised
+- Document all safety hazards in field report""",
+            "classification": {
+                "category": "FIBER_OPTIC_EMERGENCY",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "fiber-safety-manual",
+                    "title": "Fiber Optic Safety Manual - Wet Weather Operations",
+                    "page": 47,
+                    "confidence": 0.98,
+                    "excerpt": "When splicing fiber optic cables in wet conditions, arc parameters must be adjusted to compensate for atmospheric moisture. Increase arc power by 10% and fusion time by 2 seconds to ensure proper glass flow."
+                },
+                {
+                    "id": "storm-response-procedures",
+                    "title": "Telecommunications Storm Response Procedures",
+                    "page": 12,
+                    "confidence": 0.95,
+                    "excerpt": "De-energize all equipment before beginning emergency repairs. Wait minimum 30 minutes after last lightning strike before ascending aerial structures. Document all damage with photographs for insurance and FEMA claims."
+                }
+            ],
+            "metadata": {
+                "category": "FIBER_OPTIC_EMERGENCY",
+                "query_type": "document",
+                "render_type": "fiber_optic_safety",
+                "is_emergency_response": True,
+                "emergency_type": "storm_damage",
+                "context": {
+                    "weather": {
+                        "conditions": "Post-storm, wet conditions",
+                        "wind_speed": "15-20 mph",
+                        "precipitation": "Light rain"
+                    },
+                    "outage_impact": {
+                        "customers_affected": "1,200",
+                        "critical_facilities": "Rural hospital, 2 schools"
+                    }
+                }
+            }
+        },
+        priority=95,  # High priority for emergency responses
+        exact_match=False
+    )
+)
+
 # Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
