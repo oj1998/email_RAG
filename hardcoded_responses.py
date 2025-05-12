@@ -814,6 +814,101 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+# Directional Drilling Specifications Response
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(specification|spec|standard|requirement|procedure|how).*(directional|horizontal|HDD).*(drill|boring).*(highway|road|utilities|utility|underground)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Directional Drilling Under Highways - Technical Specifications
+
+## Pre-Drilling Requirements
+1. **Utility Locates:** Obtain current utility locates (valid within 48 hours)
+2. **Soil Analysis:** Conduct geotechnical survey to determine soil composition  
+3. **Permits:** Secure DOT permits and right-of-way authorizations
+4. **Traffic Control:** Implement approved traffic management plan
+
+## Bore Path Specifications
+* **Minimum Depth:** 48 inches below roadway surface (60 inches for state highways)
+* **Entry Angle:** 8-12 degrees (never exceed 20 degrees)
+* **Exit Angle:** 5-10 degrees for smooth cable/conduit pullback
+* **Bore Diameter:** Minimum 1.5x bundle diameter (2x for rocky conditions)
+* **Bend Radius:** Minimum 1200 feet for fiber optic installations
+
+## Critical Clearances from Utilities
+- Gas Lines: 24-inch minimum horizontal/vertical separation
+- Water Mains: 12-inch minimum separation
+- Electric Lines: 24-inch from primary, 12-inch from secondary
+- Sewer Lines: 24-inch minimum (48-inch preferred)
+- Storm Drains: 12-inch minimum separation
+
+## Drilling Fluid Management
+- Use only approved biodegradable drilling fluids
+- Maintain 30-50 psi fluid pressure during pilot bore
+- Monitor for inadvertent returns (frac-outs)
+- Contain and properly dispose of all drilling fluids
+
+## Safety Requirements
+- Call 811 utility notification 72 hours before drilling
+- Maintain pothole excavations every 50 feet in congested areas
+- Use ground penetrating radar when utilities are within 36 inches
+- Install tracer wire with all non-metallic conduits
+
+## Quality Control Checkpoints
+- Verify bore path alignment every 20 feet
+- Document actual vs planned path deviation
+- Conduct mandrel test before cable installation
+- Pressure test conduit at 15 psi for 15 minutes
+
+## Highway Crossing Specific Requirements
+When crossing under highways, additional specifications apply:
+- Submit engineered drawings to DOT for approval
+- Maintain minimum 10-foot offset from bridge abutments
+- Install warning tape 12 inches above conduit
+- Place permanent markers at entry/exit points""",
+            "classification": {
+                "category": "DIRECTIONAL_DRILLING",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "YOUR-DRILLING-MANUAL-DOC-ID",  # REPLACE WITH ACTUAL ID
+                    "title": "Directional Drilling Technical Manual",
+                    "page": 23,
+                    "confidence": 0.97,
+                    "excerpt": "When crossing under highways, minimum depth requirements increase to 48 inches below roadway surface, with 60 inches required for state highways. Entry angles must be maintained between 8-12 degrees for optimal bore path stability."
+                },
+                {
+                    "id": "YOUR-DOT-REQUIREMENTS-DOC-ID",  # REPLACE WITH ACTUAL ID
+                    "title": "DOT Highway Crossing Requirements",
+                    "page": 15,
+                    "confidence": 0.94,
+                    "excerpt": "All underground utility crossings beneath state highways require engineered drawings and DOT approval. Maintain minimum 10-foot offset from bridge abutments and install permanent markers at bore entry/exit points."
+                }
+            ],
+            "metadata": {
+                "category": "DIRECTIONAL_DRILLING",
+                "query_type": "document",
+                "render_type": "directional_drilling_specs",
+                "project_context": {
+                    "crossing_type": "highway",
+                    "soil_conditions": "mixed clay/rock",
+                    "existing_utilities": ["gas", "water", "electric", "telecom"],
+                    "permit_status": "pending_approval"
+                },
+                "safety_alerts": [
+                    "High-pressure gas line crosses at station 2+50",
+                    "Fiber optic trunk line at 36 inches depth",
+                    "Rock layer expected at 8-10 feet"
+                ]
+            }
+        },
+        priority=90,  # High priority
+        exact_match=False
+    )
+)
+
 # Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
