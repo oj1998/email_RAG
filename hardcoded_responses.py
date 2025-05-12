@@ -776,7 +776,7 @@ HARDCODED_RESPONSES.append(
             },
             "sources": [
                 {
-                    "id": "fiber-safety-manual",
+                    "id": "ec5caefb-f00b-4c6e-8250-4d0050792ba4",
                     "title": "Fiber Optic Safety Manual - Wet Weather Operations",
                     "page": 47,
                     "confidence": 0.98,
