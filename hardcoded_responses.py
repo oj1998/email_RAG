@@ -1039,6 +1039,105 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+# Hospital Sheet Vinyl Installation Response
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(how|what|procedure|install).*(sheet vinyl|vinyl).*(hospital|operating room|OR|medical|healthcare)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Hospital Operating Room - Sheet Vinyl Installation Protocol
+
+## Critical Compliance Requirements
+* Operating room must be scheduled out of service for 72 hours minimum
+* HEPA filtration system must remain operational throughout installation
+* Infection Control must approve all materials before use
+* Continuous monitoring of temperature and humidity required
+
+## Environmental Controls
+- **Temperature:** 68-72°F (20-22°C)
+- **Humidity:** 45-55% RH
+- **Air Changes:** 20+ per hour
+- **Pressure:** Positive 0.03" w.g.
+
+## Installation Procedure
+
+### Step 1: Pre-Installation Substrate Testing
+Conduct moisture testing per ASTM F1869 (calcium chloride) and ASTM F2170 (RH probe). Maximum acceptable readings: 3 lbs/1000 sq ft/24hr or 80% RH.
+
+### Step 2: Adhesive Application
+Apply healthcare-grade, low-VOC adhesive using 1/16" x 1/16" x 1/16" square-notch trowel. Allow proper flash time based on temperature and humidity conditions.
+
+**Critical:** Adhesive must be antimicrobial and meet GREENGUARD Gold certification
+
+### Step 3: Flash Cove Installation
+Install integral flash coving with minimum 6" height. Use pre-formed inside corners. All transitions must be heat-welded to create monolithic surface.
+
+### Step 4: Heat Welding Seams
+Groove seams to 2/3 material thickness. Heat weld at 650°F using color-matched welding rod. Allow to cool completely before skiving flush with surface.
+
+### Step 5: Final Inspection & Documentation
+Complete infection control checklist. Document all seam locations with photos. Perform final cleaning with approved hospital-grade disinfectant.
+
+**Required:** Submit installation certificate to Facilities and Infection Control""",
+            "classification": {
+                "category": "HEALTHCARE_INSTALLATION",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "e051d95c-016c-4b1a-9011-7cec39966804",
+                    "title": "IPC Healthcare Flooring Standards 2024",
+                    "page": 47,
+                    "confidence": 0.98,
+                    "excerpt": "Operating room flooring must meet strict infection control requirements. Sheet vinyl installation requires continuous cove base with heat-welded seams. All seams must be sealed using manufacturer-approved welding rod at 650°F. Minimum 6-inch flash coving at all wall junctions is mandatory."
+                },
+                {
+                    "id": "vinyl-manufacturer-specs",
+                    "title": "Healthcare Grade Vinyl Installation Manual",
+                    "page": 112,
+                    "confidence": 0.95,
+                    "excerpt": "Temperature and humidity control critical: Maintain 65-75°F and 40-60% RH for 48 hours before, during, and after installation. Substrate moisture must not exceed 3 lbs/1000 sq ft per 24 hours (ASTM F1869) or 80% RH (ASTM F2170)."
+                },
+                {
+                    "id": "joint-commission-standards",
+                    "title": "Joint Commission Environment of Care Standards",
+                    "page": 23,
+                    "confidence": 0.92,
+                    "excerpt": "Flooring in procedural areas must be seamless where possible. Where seams are necessary, they must be chemically welded to prevent moisture infiltration and microbial growth. Documentation of installation procedures required for compliance."
+                }
+            ],
+            "metadata": {
+                "category": "HEALTHCARE_INSTALLATION",
+                "query_type": "document",
+                "render_type": "healthcare_installation_guide",
+                "is_healthcare_specific": True,
+                "compliance_requirements": {
+                    "standards": ["IPC", "Joint Commission", "GREENGUARD"],
+                    "documentation_required": True,
+                    "infection_control_approval": True
+                },
+                "environmental_requirements": {
+                    "temperature": {
+                        "min": 68,
+                        "max": 72,
+                        "unit": "fahrenheit"
+                    },
+                    "humidity": {
+                        "min": 45,
+                        "max": 55,
+                        "unit": "percent"
+                    },
+                    "air_changes": 20,
+                    "pressure": "positive"
+                }
+            }
+        },
+        priority=85,
+        exact_match=False
+    )
+)
+
 # Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
