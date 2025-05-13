@@ -734,7 +734,7 @@ Proper bearing alignment is critical to achieving consistent material forming. T
 
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(safety|precaution|procedure|protocol|how|what).*(splicin|splice|fiber|fiber optic|cable).*(wet|rain|storm|aerial|emergency|damage)",
+        query_pattern=r"(safety|precaution|procedure|protocol|how|what|guide|help|advice|best|practice|method|instruction|way|emergency|standard|should|handle|manage|do|work|repair).*(splic|fiber|optic|cable|line|network|communication).*(wet|rain|storm|aerial|emergency|damage|outdoor|weather|humid|moisture|water|damp)",
         is_regex=True,
         response_data={
             "status": "success",
@@ -817,7 +817,7 @@ HARDCODED_RESPONSES.append(
 # Directional Drilling Specifications Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(specification|spec|standard|requirement|procedure|how).*(directional|horizontal|HDD).*(drill|boring).*(highway|road|utilities|utility|underground)",
+        query_pattern=r"(specification|spec|standard|requirement|procedure|how|guide|what|install|method|process|technique|approach|system|way|work|do|perform|execute|practice|protocol).*(directional|horizontal|HDD|drill|bor|dig|tunnel|trench|cross|under).*(highway|road|utilities|utility|underground|street|path|infrastructure|pavement|asphalt|crossing|thoroughfare|passage|conduit|pipe|cable|wire|line|duct)",
         is_regex=True,
         response_data={
             "status": "success",
@@ -911,7 +911,7 @@ When crossing under highways, additional specifications apply:
 
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(consideration|requirement|challenge|procedure|guideline|what|how).*(aerial|fiber|installation|deploy).*(rural|remote|mountain|difficult terrain|challenging terrain)",
+        query_pattern=r"(consideration|requirement|challenge|procedure|guideline|what|how|install|deploy|run|hang|string|extend|place|position|construct|build|plan|design|strategy|method|approach|technique|issue|problem|concern|obstacle|difficulty|best|practice).*(aerial|fiber|optic|cable|line|wire|network|communication|overhead|pole|utility|outside|external|above|suspension).*(rural|remote|mountain|difficult|challenging|rough|rugged|uneven|harsh|wild|isolated|hard|tough|country|wilderness|backwoods|hill|elevated|terrain|landscape|topography|area|region|location|zone|environment)",
         is_regex=True,
         response_data={
             "status": "success",
