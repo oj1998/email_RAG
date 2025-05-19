@@ -1138,9 +1138,10 @@ Complete infection control checklist. Document all seam locations with photos. P
     )
 )
 
-# Add this to your HARDCODED_RESPONSES list in hardcoded_responses.py
 
-# Utilities Location Insights Response
+# Fixed Utilities Location Insights Hardcoded Response
+
+# Add this to your HARDCODED_RESPONSES list in hardcoded_responses.py
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
         query_pattern=r"(what|how|tell|information|insight|data|analysis|impact|factor|consider|production|rate|material|equipment|regulation|requirement|challenge|issue|problem|need|utility|utilities).+(install|construct|build|work|dig|trench|lay|place).+(underground|utility|utilities|pipeline|conduit|cable|wire|line|infrastructure).+(in|at|near|around|area|region|location|zone|terrain|soil|ground|earth).+",
@@ -1249,7 +1250,7 @@ The following processes can be automated for this project:
                     },
                     "timeline_impact": {
                         "additional_days": 4,
-                        "critical_path": true
+                        "critical_path": True  # Changed from lowercase "true" to uppercase "True"
                     }
                 },
                 "material_requirements": {
@@ -1261,12 +1262,12 @@ The following processes can be automated for this project:
                         "supplier": "Northeast Materials"
                     },
                     "backfill_composition": {
-                        "specialized": true,
+                        "specialized": True,  # Changed from lowercase "true" to uppercase "True"
                         "mix_ratio": "60-30-10 (native soil-aggregate-sand)",
                         "reason": "Proper compaction in clay soil"
                     },
                     "conduit_protection": {
-                        "additional": true,
+                        "additional": True,  # Changed from lowercase "true" to uppercase "True"
                         "type": "Rockshield wrapping",
                         "reason": "High rock content in soil"
                     }
@@ -1296,12 +1297,12 @@ The following processes can be automated for this project:
                         "authority": "Jacksonville Building Department"
                     },
                     "environmental": {
-                        "required": true,
+                        "required": True,  # Changed from lowercase "true" to uppercase "True"
                         "type": "Wetlands proximity documentation",
                         "authority": "Florida DEP"
                     },
                     "utility_coordination": {
-                        "required": true,
+                        "required": True,  # Changed from lowercase "true" to uppercase "True"
                         "authority": "Jacksonville Electric Authority",
                         "lead_time": 7,
                         "unit": "business days"
@@ -1315,12 +1316,12 @@ The following processes can be automated for this project:
                         "time_savings": 2.5,
                         "time_unit": "hours",
                         "impact": "procurement",
-                        "deadline_sensitive": true,
+                        "deadline_sensitive": True,  # Changed from lowercase "true" to uppercase "True"
                         "trigger_timing": "immediate",
                         "parameters": {
                             "bedding_material_percentage": 30,
                             "bedding_material_quantity": "12 cubic yards",
-                            "specialized_backfill": true,
+                            "specialized_backfill": True,  # Changed from lowercase "true" to uppercase "True"
                             "backfill_mix_ratio": "60-30-10"
                         }
                     },
@@ -1331,15 +1332,15 @@ The following processes can be automated for this project:
                         "time_savings": 4,
                         "time_unit": "hours",
                         "impact": "schedule",
-                        "deadline_sensitive": true,
-                        "critical_path": true,
+                        "deadline_sensitive": True,  # Changed from lowercase "true" to uppercase "True"
+                        "critical_path": True,  # Changed from lowercase "true" to uppercase "True"
                         "trigger_timing": "immediate",
                         "parameters": {
                             "jurisdiction": "Jacksonville",
                             "permit_type": "underground utility",
                             "lead_time": 20,
-                            "environmental_documentation": true,
-                            "wetlands_proximity": true
+                            "environmental_documentation": True,  # Changed from lowercase "true" to uppercase "True"
+                            "wetlands_proximity": True  # Changed from lowercase "true" to uppercase "True"
                         }
                     },
                     {
@@ -1349,7 +1350,7 @@ The following processes can be automated for this project:
                         "time_savings": 1.5,
                         "time_unit": "hours",
                         "impact": "logistics",
-                        "deadline_sensitive": false,
+                        "deadline_sensitive": False,  # Changed from lowercase "false" to uppercase "False"
                         "trigger_timing": "14_days_before_start",
                         "parameters": {
                             "equipment_type": ["track-mounted mini-excavator", "3-inch submersible pump"],
@@ -1365,7 +1366,7 @@ The following processes can be automated for this project:
                         "time_savings": 3,
                         "time_unit": "hours",
                         "impact": "regulatory",
-                        "deadline_sensitive": true,
+                        "deadline_sensitive": True,  # Changed from lowercase "true" to uppercase "True"
                         "trigger_timing": "with_permit",
                         "parameters": {
                             "documentation_type": "wetlands proximity",
