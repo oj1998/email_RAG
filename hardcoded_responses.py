@@ -1141,16 +1141,17 @@ Complete infection control checklist. Document all seam locations with photos. P
 
 # Fixed Utilities Location Insights Hardcoded Response
 
-# Add this to your HARDCODED_RESPONSES list in hardcoded_responses.py
+# Location-Based Utilities Analysis Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(what|how|tell|information|insight|data|analysis|impact|factor|consider|production|rate|material|equipment|regulation|requirement|challenge|issue|problem|need|utility|utilities).+(install|construct|build|work|dig|trench|lay|place).+(underground|utility|utilities|pipeline|conduit|cable|wire|line|infrastructure).+(in|at|near|around|area|region|location|zone|terrain|soil|ground|earth).+",
+        # Primary high-priority specific pattern
+        query_pattern=r"(material|utility|conduit|underground).+(requirement|order|installation|consideration).+(Jacksonville|Clay Hill|Florida)",
         is_regex=True,
         response_data={
             "status": "success",
             "answer": """# Location-Based Utility Construction Insights
 
-## Location Analysis for {location_name}
+## Location Analysis for Jacksonville
 
 ### Site Conditions Overview
 - **Soil Composition:** Clay-heavy with moderate rock content
@@ -1220,7 +1221,7 @@ The following processes can be automated for this project:
                 "query_type": "location_analysis",
                 "render_type": "utilities_location_insight",
                 "location_context": {
-                    "location_name": "Clay Hill, Jacksonville, Florida",
+                    "location_name": "Jacksonville, Florida",
                     "coordinates": {
                         "lat": 30.1846,
                         "lng": -81.8543
@@ -1250,7 +1251,7 @@ The following processes can be automated for this project:
                     },
                     "timeline_impact": {
                         "additional_days": 4,
-                        "critical_path": True  # Changed from lowercase "true" to uppercase "True"
+                        "critical_path": True
                     }
                 },
                 "material_requirements": {
@@ -1262,12 +1263,12 @@ The following processes can be automated for this project:
                         "supplier": "Northeast Materials"
                     },
                     "backfill_composition": {
-                        "specialized": True,  # Changed from lowercase "true" to uppercase "True"
+                        "specialized": True,
                         "mix_ratio": "60-30-10 (native soil-aggregate-sand)",
                         "reason": "Proper compaction in clay soil"
                     },
                     "conduit_protection": {
-                        "additional": True,  # Changed from lowercase "true" to uppercase "True"
+                        "additional": True,
                         "type": "Rockshield wrapping",
                         "reason": "High rock content in soil"
                     }
@@ -1297,12 +1298,12 @@ The following processes can be automated for this project:
                         "authority": "Jacksonville Building Department"
                     },
                     "environmental": {
-                        "required": True,  # Changed from lowercase "true" to uppercase "True"
+                        "required": True,
                         "type": "Wetlands proximity documentation",
                         "authority": "Florida DEP"
                     },
                     "utility_coordination": {
-                        "required": True,  # Changed from lowercase "true" to uppercase "True"
+                        "required": True,
                         "authority": "Jacksonville Electric Authority",
                         "lead_time": 7,
                         "unit": "business days"
@@ -1310,19 +1311,19 @@ The following processes can be automated for this project:
                 },
                 "automation_triggers": [
                     {
-                        "id": "materials-order",
-                        "name": "Materials Order Preparation",
-                        "description": "Generate order for additional bedding sand and specialized backfill",
-                        "time_savings": 2.5,
+                        "id": "auto-material-1",
+                        "name": "Material Order Generation",
+                        "description": "Create and send material order based on requirements",
+                        "time_savings": 2,
                         "time_unit": "hours",
                         "impact": "procurement",
-                        "deadline_sensitive": True,  # Changed from lowercase "true" to uppercase "True"
-                        "trigger_timing": "immediate",
+                        "deadline_sensitive": True,
+                        "critical_path": False,
+                        "trigger_timing": "2_weeks_before_start",
                         "parameters": {
-                            "bedding_material_percentage": 30,
-                            "bedding_material_quantity": "12 cubic yards",
-                            "specialized_backfill": True,  # Changed from lowercase "true" to uppercase "True"
-                            "backfill_mix_ratio": "60-30-10"
+                            "supplier": "Northeast Materials",
+                            "material_type": "Sand",
+                            "additional_percentage": 30
                         }
                     },
                     {
@@ -1332,15 +1333,15 @@ The following processes can be automated for this project:
                         "time_savings": 4,
                         "time_unit": "hours",
                         "impact": "schedule",
-                        "deadline_sensitive": True,  # Changed from lowercase "true" to uppercase "True"
-                        "critical_path": True,  # Changed from lowercase "true" to uppercase "True"
+                        "deadline_sensitive": True,
+                        "critical_path": True,
                         "trigger_timing": "immediate",
                         "parameters": {
                             "jurisdiction": "Jacksonville",
                             "permit_type": "underground utility",
                             "lead_time": 20,
-                            "environmental_documentation": True,  # Changed from lowercase "true" to uppercase "True"
-                            "wetlands_proximity": True  # Changed from lowercase "true" to uppercase "True"
+                            "environmental_documentation": True,
+                            "wetlands_proximity": True
                         }
                     },
                     {
@@ -1350,7 +1351,7 @@ The following processes can be automated for this project:
                         "time_savings": 1.5,
                         "time_unit": "hours",
                         "impact": "logistics",
-                        "deadline_sensitive": False,  # Changed from lowercase "false" to uppercase "False"
+                        "deadline_sensitive": False,
                         "trigger_timing": "14_days_before_start",
                         "parameters": {
                             "equipment_type": ["track-mounted mini-excavator", "3-inch submersible pump"],
@@ -1358,30 +1359,238 @@ The following processes can be automated for this project:
                             "special_requirements": "Rock saw attachment",
                             "availability_alert": "Limited track excavators in region"
                         }
-                    },
-                    {
-                        "id": "environmental-compliance",
-                        "name": "Environmental Compliance",
-                        "description": "Generate wetlands proximity documentation",
-                        "time_savings": 3,
-                        "time_unit": "hours",
-                        "impact": "regulatory",
-                        "deadline_sensitive": True,  # Changed from lowercase "true" to uppercase "True"
-                        "trigger_timing": "with_permit",
-                        "parameters": {
-                            "documentation_type": "wetlands proximity",
-                            "authority": "Florida DEP",
-                            "project_coordinates": {
-                                "lat": 30.1846,
-                                "lng": -81.8543
-                            },
-                            "water_table_depth": "4-6 feet"
-                        }
                     }
                 ]
             }
         },
         priority=85,  # High priority
+        exact_match=False
+    )
+)
+
+# Backup more general pattern for utilities in Jacksonville
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(utility|utilities|underground|conduit|pipe).+(Jacksonville|Florida)",
+        is_regex=True,
+        # Same response data as above
+        response_data={
+            "status": "success",
+            "answer": """# Location-Based Utility Construction Insights
+
+## Location Analysis for Jacksonville
+
+### Site Conditions Overview
+- **Soil Composition:** Clay-heavy with moderate rock content
+- **Water Table:** 4-6 feet below grade, seasonal variation of 2 feet
+- **Terrain:** Gently sloping with 3-5% grade changes
+- **Underground Infrastructure Density:** Moderate (8 existing utilities per 100 linear feet)
+- **Ground Frost Penetration:** 16-22 inches during winter months
+
+### Production Metrics Impact
+- **Trenching Rate:** 240-280 ft/day (15% below company average)
+- **Conduit Installation:** 320-350 ft/day (standard efficiency)
+- **Backfill Operations:** 275-300 ft/day (10% below average due to soil composition)
+- **Project Timeline Adjustment:** Additional 4 days required for this location
+
+### Material Requirements
+- **Bedding Material:** Requires 30% additional sand bedding due to clay soil conditions
+- **Backfill Composition:** Need specialized mix ratio for proper compaction
+- **Conduit Protection:** Additional protective measures needed due to rock content
+- **Recommended Supplier:** Northeast Materials (closest to site, special contractor rates)
+
+### Equipment Recommendations
+- **Primary Excavator:** Track-mounted mini-excavator recommended over standard backhoe
+- **Shoring Requirements:** Hydraulic shoring system for depths over 5 feet
+- **Dewatering Equipment:** Submersible pump on standby for seasonal water table fluctuations
+- **Specialized Tools:** Rock saw attachment recommended for trenching
+
+### Regulatory Considerations
+- **Local Permit Lead Time:** 20 business days (vs. standard 10 days)
+- **Environmental Requirements:** Wetlands proximity documentation required
+- **Utility Coordination:** Jacksonville Electric Authority coordination needed
+- **Traffic Control Plan:** Modified requirements due to residential zoning
+
+### Actionable Insight Summary
+1. **Schedule Impact:** Begin permit process immediately to avoid critical path delays
+2. **Material Procurement:** Order additional 12 cubic yards of bedding sand
+3. **Equipment Scheduling:** Reserve track equipment 14 days before project start
+4. **Crew Configuration:** Add one additional laborer for proper soil handling
+
+### Automation Opportunities
+The following processes can be automated for this project:
+1. **Materials Order Preparation** - Additional bedding and specialized backfill calculation and ordering
+2. **Permit Application Workflow** - Streamlined application for 20-day lead time permits
+3. **Equipment Scheduling** - Reservation of track and dewatering equipment
+4. **Environmental Compliance** - Generation of wetlands proximity documentation""",
+            "classification": {
+                "category": "LOCATION_UTILITIES_INSIGHTS",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "utility-location-guide-2025",
+                    "title": "Regional Utility Installation Standards",
+                    "page": 42,
+                    "confidence": 0.96,
+                    "excerpt": "Clay-heavy soils in the northeastern Florida region require 25-30% additional bedding material compared to sandy soils. Production rates for trenching operations should be adjusted by 15-20% to account for the increased difficulty."
+                },
+                {
+                    "id": "jax-utilities-handbook",
+                    "title": "Jacksonville Utilities Installation Handbook",
+                    "page": 18,
+                    "confidence": 0.94,
+                    "excerpt": "Permit applications for underground utility work in Clay Hill and surrounding areas require additional environmental documentation due to wetlands proximity. Allow 15-20 business days for permit processing."
+                }
+            ],
+            "metadata": {
+                "category": "LOCATION_UTILITIES_INSIGHTS",
+                "query_type": "location_analysis",
+                "render_type": "utilities_location_insight",
+                "location_context": {
+                    "location_name": "Jacksonville, Florida",
+                    "coordinates": {
+                        "lat": 30.1846,
+                        "lng": -81.8543
+                    },
+                    "region_type": "suburban",
+                    "soil_type": "clay-heavy",
+                    "local_jurisdiction": "Jacksonville, FL"
+                },
+                "production_metrics": {
+                    "trenching_rate": {
+                        "expected": 260,
+                        "unit": "ft/day",
+                        "company_average": 305,
+                        "variance": -15
+                    },
+                    "conduit_installation": {
+                        "expected": 335,
+                        "unit": "ft/day",
+                        "company_average": 340,
+                        "variance": -1.5
+                    },
+                    "backfill_operations": {
+                        "expected": 287,
+                        "unit": "ft/day",
+                        "company_average": 320,
+                        "variance": -10
+                    },
+                    "timeline_impact": {
+                        "additional_days": 4,
+                        "critical_path": True
+                    }
+                },
+                "material_requirements": {
+                    "bedding_material": {
+                        "type": "Sand",
+                        "additional_percentage": 30,
+                        "reason": "Clay soil conditions",
+                        "quantity": "12 cubic yards",
+                        "supplier": "Northeast Materials"
+                    },
+                    "backfill_composition": {
+                        "specialized": True,
+                        "mix_ratio": "60-30-10 (native soil-aggregate-sand)",
+                        "reason": "Proper compaction in clay soil"
+                    },
+                    "conduit_protection": {
+                        "additional": True,
+                        "type": "Rockshield wrapping",
+                        "reason": "High rock content in soil"
+                    }
+                },
+                "equipment_recommendations": {
+                    "primary_excavator": {
+                        "recommended": "Track-mounted mini-excavator",
+                        "standard": "Backhoe loader",
+                        "reason": "Maneuverability and soil conditions"
+                    },
+                    "shoring": {
+                        "type": "Hydraulic",
+                        "depth_threshold": 5,
+                        "unit": "feet"
+                    },
+                    "dewatering": {
+                        "needed": "standby",
+                        "equipment": "3-inch submersible pump",
+                        "reason": "Seasonal water table fluctuations"
+                    }
+                },
+                "regulatory_considerations": {
+                    "local_permit": {
+                        "lead_time": 20,
+                        "unit": "business days",
+                        "standard_lead_time": 10,
+                        "authority": "Jacksonville Building Department"
+                    },
+                    "environmental": {
+                        "required": True,
+                        "type": "Wetlands proximity documentation",
+                        "authority": "Florida DEP"
+                    },
+                    "utility_coordination": {
+                        "required": True,
+                        "authority": "Jacksonville Electric Authority",
+                        "lead_time": 7,
+                        "unit": "business days"
+                    }
+                },
+                "automation_triggers": [
+                    {
+                        "id": "auto-material-1",
+                        "name": "Material Order Generation",
+                        "description": "Create and send material order based on requirements",
+                        "time_savings": 2,
+                        "time_unit": "hours",
+                        "impact": "procurement",
+                        "deadline_sensitive": True,
+                        "critical_path": False,
+                        "trigger_timing": "2_weeks_before_start",
+                        "parameters": {
+                            "supplier": "Northeast Materials",
+                            "material_type": "Sand",
+                            "additional_percentage": 30
+                        }
+                    },
+                    {
+                        "id": "permit-application",
+                        "name": "Permit Application Workflow",
+                        "description": "Start Jacksonville permit process with 20-day lead time",
+                        "time_savings": 4,
+                        "time_unit": "hours",
+                        "impact": "schedule",
+                        "deadline_sensitive": True,
+                        "critical_path": True,
+                        "trigger_timing": "immediate",
+                        "parameters": {
+                            "jurisdiction": "Jacksonville",
+                            "permit_type": "underground utility",
+                            "lead_time": 20,
+                            "environmental_documentation": True,
+                            "wetlands_proximity": True
+                        }
+                    },
+                    {
+                        "id": "equipment-scheduling",
+                        "name": "Equipment Scheduling Agent",
+                        "description": "Reserve track equipment and dewatering equipment",
+                        "time_savings": 1.5,
+                        "time_unit": "hours",
+                        "impact": "logistics",
+                        "deadline_sensitive": False,
+                        "trigger_timing": "14_days_before_start",
+                        "parameters": {
+                            "equipment_type": ["track-mounted mini-excavator", "3-inch submersible pump"],
+                            "duration": "project duration",
+                            "special_requirements": "Rock saw attachment",
+                            "availability_alert": "Limited track excavators in region"
+                        }
+                    }
+                ]
+            }
+        },
+        priority=75,  # Lower priority than the specific pattern
         exact_match=False
     )
 )
