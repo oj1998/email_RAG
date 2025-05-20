@@ -1145,7 +1145,7 @@ Complete infection control checklist. Document all seam locations with photos. P
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
         # Primary high-priority specific pattern
-        query_pattern=r"(material|utility|conduit|underground).+(requirement|order|installation|consideration).+(Jacksonville|Clay Hill|Florida)",
+        query_pattern=r"(material|utility|conduit|underground).+(requirement|order|installation|consideration).+(Fort Wayne|Indiana)",
         is_regex=True,
         response_data={
             "status": "success",
