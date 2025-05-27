@@ -30,10 +30,10 @@ class HardcodedResponse:
 # Create a registry of hardcoded responses
 HARDCODED_RESPONSES: List[HardcodedResponse] = []
 
-# Emergency Storm Damage Assessment Response
+# Emergency Storm Damage Assessment Response - Very Flexible Triggers
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(emergency|storm|damage|water intrusion|membrane tear|roof damage).+(medical center|hospital|healthcare|riverside|assessment|protocol|inspection)",
+        query_pattern=r"(storm|emergency|damage|leak|water|intrusion|membrane|tear|roof|flooding|hurricane|wind|hail|assess|inspection|urgent|critical|hospital|medical|healthcare|riverside|OR|operating room|built.up|BUR|containment|tarp|immediate)",
         is_regex=True,
         response_data={
             "status": "success",
@@ -236,10 +236,10 @@ Based on the reported conditions at Riverside Medical Center, this constitutes a
     )
 )
 
-# Healthcare Roofing Repair Protocol Response
+# Healthcare Roofing Repair Protocol Response - Very Flexible Triggers
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(assessment complete|confirmed membrane failure|structural deck intact|medical center|weekend|repair|healthcare facility|compliance|specification)",
+        query_pattern=r"(repair|fix|replace|install|weekend|downtime|schedule|protocol|compliance|healthcare|medical|hospital|joint commission|infection control|HVAC|membrane|installation|restoration|air quality|antimicrobial|certification|VOC|sterile|patient|surgery|OR|specification|standard|procedure|phase)",
         is_regex=True,
         response_data={
             "status": "success",
