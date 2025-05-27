@@ -1,5 +1,34 @@
+# hardcoded_responses.py
+from typing import Dict, Any, List, Optional
+import re
 
-# Add this to your HARDCODED_RESPONSES list in hardcoded_responses.py
+# Define a structure for hardcoded responses
+class HardcodedResponse:
+    def __init__(
+        self,
+        query_pattern: str,
+        is_regex: bool,
+        response_data: Dict[str, Any],
+        exact_match: bool = False,
+        priority: int = 0  # Higher number = higher priority
+    ):
+        self.query_pattern = query_pattern
+        self.is_regex = is_regex
+        self.response_data = response_data
+        self.exact_match = exact_match
+        self.priority = priority
+    
+    def matches(self, query: str) -> bool:
+        """Check if the query matches this hardcoded response"""
+        if self.exact_match:
+            return query.strip().lower() == self.query_pattern.lower()
+        elif self.is_regex:
+            return bool(re.search(self.query_pattern, query, re.IGNORECASE))
+        else:
+            return self.query_pattern.lower() in query.lower()
+
+# Create a registry of hardcoded responses
+HARDCODED_RESPONSES: List[HardcodedResponse] = []
 
 # Emergency Storm Damage Assessment Response
 HARDCODED_RESPONSES.append(
@@ -206,3 +235,118 @@ Based on the reported conditions at Riverside Medical Center, this constitutes a
         exact_match=False
     )
 )
+
+# Healthcare Roofing Repair Protocol Response
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(assessment complete|confirmed membrane failure|structural deck intact|medical center|weekend|repair|healthcare facility|compliance|specification)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Healthcare Roofing Repair Protocol - Emergency Weekend Implementation
+
+## Executive Summary
+
+Based on completed damage assessment at Riverside Medical Center, we have **confirmed membrane failure with structural deck remaining intact**. The facility requires emergency repairs during the weekend downtime window to restore weather integrity while maintaining full healthcare compliance standards.
+
+## Critical Timeline Requirements
+- **Work Window:** Saturday 6 PM - Monday 6 AM (58-hour maximum)
+- **Weather Window:** Optimal conditions confirmed for weekend
+- **Completion Deadline:** Sunday 8 PM (10-hour safety buffer)
+- **Total Repair Duration:** 25 hours across 6 phases
+
+## Healthcare-Specific Compliance Framework
+
+### Joint Commission Requirements
+All repair work must maintain strict compliance with Joint Commission environment of care standards, including continuous air quality monitoring, infection control protocols, and documentation of all containment measures affecting patient areas.
+
+### Critical Systems Coordination
+The repair protocol includes specialized procedures for healthcare facilities:
+- OR HVAC system isolation and restoration protocols
+- Medical gas system protection during membrane work
+- Emergency power system coordination
+- Patient monitoring system continuity verification
+
+## Repair Phase Overview
+
+### Phase 1: Healthcare Facility Isolation (2 hours)
+Establish medical-grade containment protocols with Infection Control Officer coordination, HVAC zone isolation, and negative pressure barriers with HEPA filtration systems.
+
+### Phase 2: Emergency Weather Protection (4 hours)
+Deploy commercial-grade temporary protection systems with 24/7 monitoring to prevent further water intrusion during repair operations.
+
+### Phase 3: Healthcare-Grade Surface Preparation (6 hours)
+Remove damaged membrane using healthcare-approved methods, including antimicrobial surface treatment and disinfection protocols meeting hospital indoor air quality standards.
+
+### Phase 4: Medical-Grade Membrane Installation (8 hours)
+Install new membrane system using healthcare-certified materials with zero-VOC emissions, antimicrobial properties, and heat-welded seams requiring 100% water testing verification.
+
+### Phase 5: Critical Systems Reactivation (3 hours)
+Restore all building systems with comprehensive air quality testing, Joint Commission documentation, and Infection Control sign-off before patient area reoccupancy.
+
+### Phase 6: Healthcare Compliance Final Inspection (2 hours)
+Complete final inspection including water testing, air quality verification, photographic documentation, and generation of all required compliance certificates.""",
+            "classification": {
+                "category": "HEALTHCARE_ROOFING_REPAIR",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "joint-commission-roofing-standards",
+                    "title": "Joint Commission Healthcare Facility Environment Standards",
+                    "page": 45,
+                    "confidence": 0.98,
+                    "excerpt": "Emergency roofing repairs in healthcare facilities must maintain strict air quality standards and require Infection Control Officer oversight for all containment protocols affecting patient care areas."
+                },
+                {
+                    "id": "healthcare-roofing-materials-guide",
+                    "title": "Healthcare Facility Roofing Materials Guide",
+                    "page": 23,
+                    "confidence": 0.95,
+                    "excerpt": "All roofing materials used in healthcare facilities must meet GREENGUARD Gold certification for indoor air quality and include antimicrobial properties to prevent contamination of medical environments."
+                },
+                {
+                    "id": "emergency-repair-protocols-hospitals",
+                    "title": "Emergency Repair Protocols for Hospital Infrastructure",
+                    "page": 78,
+                    "confidence": 0.93,
+                    "excerpt": "Weekend repair windows in healthcare facilities require coordination with critical systems including medical gas, emergency power, and HVAC systems to ensure continuous patient care capabilities."
+                }
+            ],
+            "metadata": {
+                "category": "HEALTHCARE_ROOFING_REPAIR",
+                "query_type": "document",
+                "render_type": "healthcare_roofing_repair",
+                "is_emergency_repair": True,
+                "facility_info": {
+                    "name": "Riverside Medical Center",
+                    "type": "Healthcare Facility",
+                    "downtime_window": "Weekend: Saturday 6 PM - Monday 6 AM",
+                    "critical_systems": ["OR HVAC", "Emergency Power", "Medical Gas Systems", "Patient Monitoring"]
+                },
+                "weather_window": {
+                    "optimal_start": "Saturday 6:00 PM",
+                    "completion_deadline": "Sunday 8:00 PM",
+                    "weather_constraints": ["No precipitation expected", "Winds below 15 mph", "Temperature above 45°F"]
+                }
+            }
+        },
+        priority=95,  # High priority but below critical emergencies
+        exact_match=False
+    )
+)
+
+# Function to check for hardcoded responses
+def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
+    """Check if we have a hardcoded response for this query"""
+    matching_responses = []
+    
+    for response in HARDCODED_RESPONSES:
+        if response.matches(query):
+            matching_responses.append(response)
+    
+    if not matching_responses:
+        return None
+    
+    # Return the highest priority response
+    return sorted(matching_responses, key=lambda x: x.priority, reverse=True)[0].response_data
