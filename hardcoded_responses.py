@@ -292,22 +292,28 @@ Complete final inspection including water testing, air quality verification, pho
             },
             "sources": [
                 {
-                    "id": "joint-commission-roofing-standards",
+                    "id": "00cf74dc-c3c3-4b89-8385-4fb9b0b3655e",
                     "title": "Joint Commission Healthcare Facility Environment Standards",
+                    "document_id": "JC-ENV-2024-045",
+                    "filename": "Joint Commission Healthcare Facility Environment Standards.txt",
                     "page": 45,
                     "confidence": 0.98,
                     "excerpt": "Emergency roofing repairs in healthcare facilities must maintain strict air quality standards and require Infection Control Officer oversight for all containment protocols affecting patient care areas."
                 },
                 {
-                    "id": "healthcare-roofing-materials-guide",
-                    "title": "Healthcare Facility Roofing Materials Guide",
+                    "id": "00cf74dc-c3c3-4b89-8385-4fb9b0b3655e",
+                    "title": "Joint Commission Healthcare Facility Environment Standards",
+                    "document_id": "JC-ENV-2024-045",
+                    "filename": "Joint Commission Healthcare Facility Environment Standards.txt",
                     "page": 23,
                     "confidence": 0.95,
                     "excerpt": "All roofing materials used in healthcare facilities must meet GREENGUARD Gold certification for indoor air quality and include antimicrobial properties to prevent contamination of medical environments."
                 },
                 {
-                    "id": "emergency-repair-protocols-hospitals",
-                    "title": "Emergency Repair Protocols for Hospital Infrastructure",
+                    "id": "00cf74dc-c3c3-4b89-8385-4fb9b0b3655e",
+                    "title": "Joint Commission Healthcare Facility Environment Standards",
+                    "document_id": "JC-ENV-2024-045",
+                    "filename": "Joint Commission Healthcare Facility Environment Standards.txt",
                     "page": 78,
                     "confidence": 0.93,
                     "excerpt": "Weekend repair windows in healthcare facilities require coordination with critical systems including medical gas, emergency power, and HVAC systems to ensure continuous patient care capabilities."
