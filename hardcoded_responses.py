@@ -30,10 +30,10 @@ class HardcodedResponse:
 # Create a registry of hardcoded responses
 HARDCODED_RESPONSES: List[HardcodedResponse] = []
 
-# Emergency Storm Damage Assessment Response - Very Flexible Triggers
+# Emergency Storm Damage Assessment Response - Triggered by specific phrase
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(storm|emergency|damage|leak|water|intrusion|membrane|tear|roof|flooding|hurricane|wind|hail|assess|inspection|urgent|critical|hospital|medical|healthcare|riverside|OR|operating room|built.up|BUR|containment|tarp|immediate)",
+        query_pattern=r"i suspect membrane damage at the riverside medical center",
         is_regex=True,
         response_data={
             "status": "success",
@@ -236,10 +236,10 @@ Based on the reported conditions at Riverside Medical Center, this constitutes a
     )
 )
 
-# Healthcare Roofing Repair Protocol Response - Very Flexible Triggers
+# Healthcare Roofing Repair Protocol Response - Triggered by weekend repair query
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(repair|fix|replace|install|weekend|downtime|schedule|protocol|compliance|healthcare|medical|hospital|joint commission|infection control|HVAC|membrane|installation|restoration|air quality|antimicrobial|certification|VOC|sterile|patient|surgery|OR|specification|standard|procedure|phase)",
+        query_pattern=r"membrane damaged confirmed.*we need repairs this weekend.*what is weekend repair protocol",
         is_regex=True,
         response_data={
             "status": "success",
