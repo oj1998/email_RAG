@@ -30,10 +30,10 @@ class HardcodedResponse:
 # Create a registry of hardcoded responses
 HARDCODED_RESPONSES: List[HardcodedResponse] = []
 
-# Emergency Storm Damage Assessment Response - Triggered by specific phrase
+# Emergency Storm Damage Assessment Response - Triggered by membrane damage suspicion
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"i suspect membrane damage at the riverside medical center",
+        query_pattern=r"i suspect membrane damage.*what do i do",
         is_regex=True,
         response_data={
             "status": "success",
@@ -236,10 +236,10 @@ Based on the reported conditions at Riverside Medical Center, this constitutes a
     )
 )
 
-# Healthcare Roofing Repair Protocol Response - Triggered by weekend repair query
+# Healthcare Roofing Repair Protocol Response - Triggered by confirmed repairs needed
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"membrane damaged confirmed.*we need repairs this weekend.*what is weekend repair protocol",
+        query_pattern=r"i'?ve confirmed this will require repairs.*what is the protocol for that",
         is_regex=True,
         response_data={
             "status": "success",
