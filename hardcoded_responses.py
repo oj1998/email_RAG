@@ -165,6 +165,103 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+# Climate Data Visualization
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern="show me climate data variance",
+        is_regex=False,
+        response_data={
+            "status": "success",
+            "answer": """# Climate Impact Analysis
+
+## Temperature Variations
+
+Global measurements show significant variations across regions. Northern areas experience more pronounced warming, with some regions showing temperature increases of up to 2.1°C above pre-industrial levels. Southern hemisphere changes are more moderate, averaging 0.8-1.2°C increases.
+
+## Precipitation Patterns
+
+Precipitation patterns show high regional variability:
+- Increased rainfall intensity in equatorial regions
+- Prolonged drought conditions in mid-latitudes
+- More frequent extreme precipitation events globally
+
+## Source Conflicts
+
+Different climate models project varying outcomes for certain regions, particularly in predicting monsoon pattern shifts across Southeast Asia and agricultural impacts in transitional climate zones.
+""",
+            "classification": {
+                "category": "CLIMATE_DATA",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "doc-123",
+                    "title": "Climate Report 2024",
+                    "page": 42,
+                    "confidence": 0.95,
+                    "excerpt": "Temperature variations across regions indicate..."
+                }
+            ],
+            "metadata": {
+                "category": "CUSTOM_RENDERER_REQUIRED",
+                "query_type": "special_visualization",
+                "render_type": "climate_data_visual",
+                "custom_renderer_data": {
+                    "chart_type": "temperature_variance",
+                    "regions": ["North America", "Europe", "Asia"],
+                    "time_period": "2020-2024"
+                }
+            }
+        },
+        exact_match=True,
+        priority=50
+    )
+)
+
+# Construction Aggregates Alternative
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(alternative|replacement|substitute|other).+(construction aggregate|aggregates|crushed stone|stone aggregate)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Alternative Construction Aggregates
+
+## Recycled Alternatives
+- **Recycled Concrete Aggregate (RCA):** Processed from demolished concrete structures, providing similar properties to natural aggregates
+- **Crushed Brick:** Derived from demolition waste, suitable for non-structural applications
+- **Glass Aggregate:** Processed from recycled glass, effective for decorative concrete and special applications
+
+## Natural Alternatives
+- **Gravel:** Natural river or pit-sourced aggregate with rounded edges
+- **Sand:** Fine aggregate for mortar and concrete mixes
+- **Slag:** Byproduct of steel production, excellent for road construction
+
+## Environmental Benefits
+Using alternative aggregates reduces quarrying impacts, decreases landfill waste, and lowers the carbon footprint of construction projects.
+
+## Application Considerations
+Always verify compliance with local building codes and structural requirements before substituting traditional aggregates.""",
+            "classification": {
+                "category": "MATERIALS",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "CONSTRUCTION_AGGREGATES_SPECIAL",
+                "query_type": "document",
+                "is_special_aggregate_query": True,
+                "special_query_details": {
+                    "type": "alternative_aggregates",
+                    "is_exact_match": False
+                }
+            }
+        },
+        exact_match=False,
+        priority=60
+    )
+)
+
 # Contract Dispute Analysis Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
