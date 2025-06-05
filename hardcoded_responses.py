@@ -1,10 +1,17 @@
-# condensed_hardcoded_responses.py
+# hardcoded_responses.py
 from typing import Dict, Any, List, Optional
 import re
 
+# Define a structure for hardcoded responses
 class HardcodedResponse:
-    def __init__(self, query_pattern: str, is_regex: bool, response_data: Dict[str, Any], 
-                 exact_match: bool = False, priority: int = 0):
+    def __init__(
+        self,
+        query_pattern: str,
+        is_regex: bool,
+        response_data: Dict[str, Any],
+        exact_match: bool = False,
+        priority: int = 0  # Higher number = higher priority
+    ):
         self.query_pattern = query_pattern
         self.is_regex = is_regex
         self.response_data = response_data
@@ -12,6 +19,7 @@ class HardcodedResponse:
         self.priority = priority
     
     def matches(self, query: str) -> bool:
+        """Check if the query matches this hardcoded response"""
         if self.exact_match:
             return query.strip().lower() == self.query_pattern.lower()
         elif self.is_regex:
@@ -19,186 +27,270 @@ class HardcodedResponse:
         else:
             return self.query_pattern.lower() in query.lower()
 
+# Create a registry of hardcoded responses
 HARDCODED_RESPONSES: List[HardcodedResponse] = []
 
-# 1. Location-Based Utilities Analysis (Fort Wayne)
+# Emergency Gas Leak Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(material|utility|conduit|underground).+(requirement|order|installation|consideration).+(Fort Wayne|Indiana)",
+        query_pattern=r"(gas.+smell|smell.+gas|gas.+leak|what.+do.+gas.+leak)",
         is_regex=True,
         response_data={
             "status": "success",
-            "answer": """# Location-Based Utility Construction Insights - Fort Wayne
+            "answer": """# EMERGENCY: GAS LEAK SAFETY PROTOCOL
 
-## Site Conditions Overview
-- **Soil Composition:** Clay-heavy with moderate rock content
-- **Water Table:** 4-6 feet below grade, seasonal variation of 2 feet
-- **Underground Infrastructure Density:** Moderate (8 existing utilities per 100 linear feet)
-- **Ground Frost Penetration:** 16-22 inches during winter months
+## Immediate Actions to Take
+1. **Evacuate the Area:** Get everyone out of the building immediately
+2. **Call for Help:** Once at a safe distance, call emergency services (911) or your gas company's emergency line
+3. **Do Not Create Sparks:** Don't turn on/off any electrical switches, use phones inside, or light matches
 
-## Material Requirements
-- **Bedding Material:** Requires 30% additional sand bedding due to clay soil conditions
-- **Backfill Composition:** Specialized mix ratio for proper compaction
-- **Conduit Protection:** Additional protective measures needed due to rock content
-- **Recommended Supplier:** Northeast Materials (closest to site, special contractor rates)
+## What NOT to Do
+* Do not attempt to locate the leak yourself
+* Do not turn any electrical equipment on or off
+* Do not use your phone until you're safely away from the area
 
-## Equipment Recommendations
-- **Primary Excavator:** Track-mounted mini-excavator recommended over standard backhoe
-- **Shoring Requirements:** Hydraulic shoring system for depths over 5 feet
-- **Dewatering Equipment:** Submersible pump on standby for seasonal water table fluctuations
-
-## Regulatory Considerations
-- **Local Permit Lead Time:** 20 business days (vs. standard 10 days)
-- **Environmental Requirements:** Wetlands proximity documentation required
-- **Utility Coordination:** Local electric authority coordination needed""",
-            "classification": {"category": "LOCATION_UTILITIES_INSIGHTS", "confidence": 1.0},
+## After Evacuation
+* Wait at a safe distance for emergency responders
+* Follow all instructions from emergency personnel
+* Do not return to the building until professionals declare it safe
+""",
+            "classification": {
+                "category": "EMERGENCY_GAS_LEAK",
+                "confidence": 1.0
+            },
+            "sources": [],
             "metadata": {
-                "category": "LOCATION_UTILITIES_INSIGHTS",
-                "render_type": "utilities_location_insight",
-                "location_context": {"location_name": "Fort Wayne, Indiana", "soil_type": "clay-heavy"}
+                "category": "EMERGENCY_GAS_LEAK",
+                "query_type": "document",
+                "render_type": "safety_protocol",
+                "is_gas_leak_emergency": True,
+                "emergency_details": {
+                    "severity": "high",
+                    "requires_immediate_action": True
+                }
             }
         },
-        priority=85
+        priority=100  # Highest priority for emergency
     )
 )
 
-# 2. Directional Drilling Under Roads
+# StormShield Installation Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(how|procedure|perform).*(directional|horizontal|HDD|drill).*(road|highway|utilities)",
+        query_pattern=r"(stormshield|storm shield).+(install|requirements|facade|west|commercial|rain)",
         is_regex=True,
         response_data={
             "status": "success",
-            "answer": """# Directional Drilling Under Highways - Technical Specifications
+            "answer": """# StormShield Installation Standards
 
-## Pre-Drilling Requirements
-1. **Utility Locates:** Obtain current utility locates (valid within 48 hours)
-2. **Soil Analysis:** Conduct geotechnical survey to determine soil composition  
-3. **Permits:** Secure DOT permits and right-of-way authorizations
-4. **Traffic Control:** Implement approved traffic management plan
+## Key Requirements for West-Facing Commercial Facades
 
-## Bore Path Specifications
-* **Minimum Depth:** 48 inches below roadway surface (60 inches for state highways)
-* **Entry Angle:** 8-12 degrees (never exceed 20 degrees)
-* **Exit Angle:** 5-10 degrees for smooth cable/conduit pullback
-* **Bore Diameter:** Minimum 1.5x bundle diameter (2x for rocky conditions)
-* **Bend Radius:** Minimum 1200 feet for fiber optic installations
+### Temperature and Environmental Requirements
+* Application temperature must be between 45-85°F with surface moisture reading below 12%
+* Do not apply if rain is expected within 48 hours
 
-## Critical Clearances from Utilities
-- Gas Lines: 24-inch minimum horizontal/vertical separation
-- Water Mains: 12-inch minimum separation
-- Electric Lines: 24-inch from primary, 12-inch from secondary
-- Sewer Lines: 24-inch minimum (48-inch preferred)
+### Proper Installation Sequence
+* Primary membrane must cure for 24 hours before secondary layer application
+* West-facing installations require double-layer application at seams with 6" overlap (increased from 4" in previous standard)
+* Use BlueBond-X adhesive formula for any installation within 15 miles of saltwater
 
-## Safety Requirements
-- Call 811 utility notification 72 hours before drilling
-- Maintain pothole excavations every 50 feet in congested areas
-- Use ground penetrating radar when utilities are within 36 inches
-- Install tracer wire with all non-metallic conduits""",
-            "classification": {"category": "DIRECTIONAL_DRILLING", "confidence": 1.0},
+### Quality Assurance
+* Schedule inspection after installation
+* Validate installation meets warranty requirements
+
+### Common Installation Errors to Avoid
+* Insufficient overlap at seams (most common failure point)
+* Using standard adhesive in coastal applications
+* Applying second layer before primary membrane has fully cured
+* Improper trowel technique leading to uneven application""",
+            "classification": {
+                "category": "PROPRIETARY_INSTALLATION",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "storm-shield-manual-v2025",
+                    "title": "StormShield Installation Guide (March 2025)",
+                    "page": 42,
+                    "confidence": 0.95,
+                    "excerpt": "West-facing installations require double-layer application at seams with 6\" overlap (increased from 4\" in previous standard). Application temperature must be between 45-85°F with surface moisture reading below 12%. Primary membrane must cure for 24 hours before secondary layer application."
+                },
+                {
+                    "id": "qa-memo-218",
+                    "title": "Quality Assurance Memo #218",
+                    "page": 3,
+                    "confidence": 0.92,
+                    "excerpt": "BlueBond-X formula is now required for any installation within 15 miles of saltwater. This update supersedes previous adhesive specifications for coastal applications."
+                }
+            ],
             "metadata": {
-                "category": "DIRECTIONAL_DRILLING",
-                "render_type": "directional_drilling_specs",
-                "project_context": {"crossing_type": "highway", "soil_conditions": "mixed clay/rock"}
+                "category": "PROPRIETARY_INSTALLATION",
+                "query_type": "document",
+                "special_query_details": {
+                    "type": "installation_guide",
+                    "product": "StormShield",
+                    "installation_type": "west_facing_facade"
+                },
+                "context": {
+                    "weather": {
+                        "currentTemp": "52°F",
+                        "forecast": "Rain expected in 48 hours",
+                        "humidity": "68%"
+                    }
+                }
             }
         },
-        priority=90
+        priority=80  # High priority but below emergency responses
     )
 )
 
-# 3. Aerial Fiber Installation in Rural Mountains
+# Contract Dispute Analysis Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        query_pattern=r"(consideration|install).*(aerial|fiber).*(rural|mountain)",
+        query_pattern=r"(who|what|when|why).+(approved|approval|change|HVAC|system).+(Westside|project)",
         is_regex=True,
         response_data={
             "status": "success",
-            "answer": """# Aerial Fiber Installation in Mountainous Rural Areas
+            "answer": """# HVAC System Change Dispute Analysis
 
-## Terrain-Specific Considerations
-1. **Access Road Limitations:** Many rural mountain areas lack proper roads - use tracked vehicles, ATVs, or helicopter support
-2. **Slope Stability:** Assess soil conditions and erosion potential before setting poles on steep grades
-3. **Weather Windows:** Mountain weather changes rapidly - monitor forecasts and plan for sudden storms
-4. **Wildlife Corridors:** Avoid disrupting migration paths and nesting areas during installation
+## Communication Timeline Analysis
 
-## Equipment Requirements for Remote Areas
-* **Specialized Vehicles:** Tracked bucket trucks, all-terrain digger derricks
-* **Portable Power:** Generator sets (minimum 25kW) for splicing equipment
-* **Communication Equipment:** Satellite phones for areas without cell coverage
-* **Emergency Supplies:** First aid, survival gear, extra food/water for crew
+After reviewing all project communications, I've identified conflicting information regarding the HVAC system change on the Westside project.
 
-## Installation Best Practices
-1. **Pole Setting on Slopes:**
-   - Increase embedment depth by 10% for every 10 degrees of slope
-   - Use crushed rock backfill for drainage on uphill side
-   - Install guy wires at 45-degree angles perpendicular to slope
+### Key Findings:
+* Original specification was clearly for Airflow 3000 model (James Rodriguez, April 1)
+* Supply chain issues were discussed in weekly meeting (Procore meeting minutes, April 5)
+* Alternative system (ThermalTech Pro) was proposed to Maria Chen, not James (April 6)
+* No formal change order was created or distributed
+* Final installation approval was given under time pressure without specific system confirmation
 
-2. **Span Lengths in Mountainous Terrain:**
-   - Reduce standard spans by 20% in areas with high wind exposure
-   - Maximum 200-foot spans across valleys (vs. 300-foot standard)
-   - Use heavy-duty suspension clamps at all angle points
+### Contract Implications:
+According to Section 12.3 of the contract, substitutions require written approval from the original requester and proper documentation through a change order process.
 
-## Safety Protocols for Remote Work
-- Minimum 3-person crews for mountain work (vs. 2-person standard)
-- Wilderness first aid certification for at least one crew member
-- Daily check-in procedures with base operations
-- Emergency evacuation plan for each work site""",
-            "classification": {"category": "RURAL_INSTALLATION", "confidence": 1.0},
+## Recommended Actions:
+1. Create retroactive change order documentation
+2. Conduct technical comparison of installed vs. specified system
+3. Negotiate cost adjustment based on documented benefits
+4. Revise approval protocols to prevent future issues
+""",
+            "classification": {
+                "category": "CONTRACT_DISPUTE",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "contract-doc-123",
+                    "title": "Westside Project Master Contract",
+                    "page": 87,
+                    "confidence": 0.95,
+                    "excerpt": "Section 12.3: All substitutions of specified materials, equipment, or systems must be approved in writing by the original requester and documented with a formal change order as specified in Section 8.2."
+                }
+            ],
             "metadata": {
-                "category": "RURAL_INSTALLATION",
-                "render_type": "rural_installation_guide",
-                "terrain_context": {"terrain_type": "mountainous", "access_difficulty": "high"}
+                "category": "CONTRACT_DISPUTE_ANALYSIS",
+                "query_type": "document",
+                "special_query_details": {
+                    "type": "communication_analysis",
+                    "project": "Westside",
+                    "issue": "hvac_system_change"
+                },
+                "timeline_events": [
+                    {
+                        "id": "email-001",
+                        "date": "2025-04-01T09:23:15",
+                        "sender": "James Rodriguez",
+                        "recipient": "HVAC Contractors Inc.",
+                        "subject": "HVAC System Requirements for Westside Project",
+                        "content": "As per our discussions during the planning phase, please ensure the installed system meets the efficiency ratings specified in the contract. We need the Airflow 3000 model as agreed.",
+                        "system": "Outlook",
+                        "tags": ["requirements", "specifications"],
+                        "relevance": 0.95
+                    },
+                    {
+                        "id": "meeting-002",
+                        "date": "2025-04-05T14:30:00",
+                        "sender": "Project Meeting",
+                        "recipient": "All Team Members",
+                        "subject": "Weekly Progress Meeting - Minutes",
+                        "content": "During discussion of HVAC installation timeline, Sam mentioned potential supply chain issues with the Airflow 3000. Alternative options were discussed but no decision was made. Action item: James to follow up with HVAC Contractors about alternatives if needed.",
+                        "system": "Procore",
+                        "tags": ["meeting-minutes", "supply-issues"],
+                        "relevance": 0.88
+                    },
+                    {
+                        "id": "email-003",
+                        "date": "2025-04-06T11:42:53",
+                        "sender": "HVAC Contractors Inc.",
+                        "recipient": "Maria Chen",
+                        "subject": "RE: Westside Project - HVAC Options",
+                        "content": "Following yesterday's meeting, we're having trouble sourcing the Airflow 3000 within your timeline. We recommend the ThermalTech Pro which actually has better efficiency ratings and we can get it installed by the original deadline. It's a bit more expensive but a superior system. Let me know if you want to proceed with this option.",
+                        "system": "Outlook",
+                        "tags": ["alternative", "recommendation"],
+                        "relevance": 0.97
+                    },
+                    {
+                        "id": "chat-004",
+                        "date": "2025-04-06T15:17:22",
+                        "sender": "Maria Chen",
+                        "recipient": "HVAC Contractors Inc.",
+                        "subject": "Direct Message",
+                        "content": "The ThermalTech Pro sounds like a good alternative. If it's better quality and meets the deadline, it might be worth considering. Let me check with the team about the additional cost.",
+                        "system": "Teams",
+                        "tags": ["confirmation", "inquiry"],
+                        "relevance": 0.92
+                    },
+                    {
+                        "id": "sms-007",
+                        "date": "2025-04-12T09:23:11",
+                        "sender": "Site Supervisor",
+                        "recipient": "Project Manager",
+                        "subject": "SMS Message",
+                        "content": "HVAC team arrived with ThermalTech Pro units. Different from what I expected but they said it was approved. Should I let them proceed with installation?",
+                        "system": "Text Message",
+                        "tags": ["urgent", "decision-needed"],
+                        "relevance": 0.99
+                    },
+                    {
+                        "id": "chat-008",
+                        "date": "2025-04-12T09:31:47",
+                        "sender": "Project Manager",
+                        "recipient": "Site Supervisor",
+                        "subject": "Teams Chat",
+                        "content": "If they're ready to go and it meets our specs, let them proceed. We can't afford delays on the HVAC installation as it's on the critical path.",
+                        "system": "Teams",
+                        "tags": ["approval", "schedule-priority"],
+                        "relevance": 0.99
+                    }
+                ],
+                "conflict_points": [
+                    {
+                        "description": "Original system specification clearly stated as Airflow 3000 in initial communication",
+                        "eventIds": ["email-001"],
+                        "severity": "medium"
+                    },
+                    {
+                        "description": "Alternative system (ThermalTech Pro) discussed with Maria Chen, not the original requester (James)",
+                        "eventIds": ["email-003", "chat-004"],
+                        "severity": "high"
+                    },
+                    {
+                        "description": "No formal change order documentation created or distributed to project team",
+                        "eventIds": ["email-006", "document-005"],
+                        "severity": "high"
+                    },
+                    {
+                        "description": "Ambiguous approval given for installation without specific system confirmation",
+                        "eventIds": ["sms-007", "chat-008"],
+                        "severity": "medium"
+                    }
+                ]
             }
         },
-        priority=85
+        priority=70  # High priority but below emergency responses
     )
 )
 
-# 4. Fiber Optic Splicing in Wet Conditions
-HARDCODED_RESPONSES.append(
-    HardcodedResponse(
-        query_pattern=r"(safety|procedure).*(splic|fiber|optic).*(wet|rain|weather)",
-        is_regex=True,
-        response_data={
-            "status": "success",
-            "answer": """# EMERGENCY: Fiber Optic Splicing - Wet Weather Protocol
-
-## Immediate Safety Requirements
-1. **De-energize all equipment:** Ensure all power sources are disconnected before beginning work
-2. **Verify atmospheric conditions:** Do not work during active lightning - wait minimum 30 minutes after last strike
-3. **Personal protective equipment:** Waterproof gloves, insulated tools, arc-rated rain gear required
-
-## Wet Weather Splicing Procedure
-1. **Establish dry work area:** Deploy portable canopy or splice enclosure tent over work zone
-2. **Cable preparation:** Thoroughly dry cable ends using lint-free wipes and isopropyl alcohol
-3. **Moisture prevention:** Apply temporary water-blocking gel to exposed fiber buffer tubes
-4. **Fusion splicing parameters:** Increase arc power by 10% and fusion time by 2 seconds for humid conditions
-5. **Splice protection:** Use heat-shrink sleeves rated for outdoor use with adhesive lining
-6. **Closure sealing:** Apply extra butyl tape around all entry points in splice enclosure
-
-## Aerial Line Specific Precautions
-* Use bucket truck with proper grounding straps
-* Maintain 10-foot clearance from energized power lines
-* Install temporary cable guards if working near electrical
-* Double-check strand bonds and grounding before touching cable
-
-## Emergency Contact Protocol
-- Notify NOC immediately upon arrival at damage site
-- Update outage management system every 30 minutes
-- Contact local power company if poles are compromised
-- Document all safety hazards in field report""",
-            "classification": {"category": "FIBER_OPTIC_EMERGENCY", "confidence": 1.0},
-            "metadata": {
-                "category": "FIBER_OPTIC_EMERGENCY",
-                "render_type": "fiber_optic_safety",
-                "is_emergency_response": True,
-                "emergency_type": "storm_damage"
-            }
-        },
-        priority=95
-    )
-)
-
+# Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
     matching_responses = []
