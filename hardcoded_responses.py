@@ -1,6 +1,7 @@
 # hardcoded_responses.py
 from typing import Dict, Any, List, Optional
 import re
+from datetime import datetime
 
 # Define a structure for hardcoded responses
 class HardcodedResponse:
@@ -331,6 +332,261 @@ HARDCODED_RESPONSES.append(
         priority=80  # High priority but below emergency responses
     )
 )
+
+# Add this new hardcoded response to your HARDCODED_RESPONSES list
+DRILL_LOGGING_RESPONSE = HardcodedResponse(
+    query_pattern=r"(drill|drilling|bore|boring).*(log|logging|report|documentation|record|mud|pullback|depth|pressure)",
+    is_regex=True,
+    response_data={
+        "status": "success",
+        "answer": """# Drill Logging Assistant Ready
+
+I'm here to help you document your drilling operation. Just tell me what's happening and I'll create the proper documentation.
+
+**Example:** "Starting bore at station 15+50, entry angle 12 degrees, using bentonite mud mix"
+
+## What I Can Help Document:
+- **Bore path data** - depth, angle, steering corrections
+- **Drilling parameters** - pressure, flow rates, penetration
+- **Mud tracking** - mixing ratios, returns, contamination
+- **Geological conditions** - soil types, obstructions, water
+- **Pullback operations** - tensions, speeds, cable integrity
+
+Just describe what's happening at your drill site and I'll format it properly for your records.""",
+        "classification": {
+            "category": "DRILL_LOGGING_CONVERSATIONAL",
+            "confidence": 1.0
+        },
+        "sources": [
+            {
+                "id": "drilling-standards-2025",
+                "title": "Directional Drilling Standards and Procedures",
+                "page": 67,
+                "confidence": 0.96,
+                "excerpt": "All drilling operations must maintain detailed logs of bore path geometry, drilling parameters, and subsurface conditions for compliance and future reference."
+            }
+        ],
+        "metadata": {
+            "category": "DRILL_LOGGING_CONVERSATIONAL",
+            "query_type": "conversational_logging",
+            "render_type": "drill_logging_interface",
+            "logging_context": {
+                "mode": "active_drilling",
+                "documentation_type": "real_time_logging",
+                "compliance_level": "municipal_utilities"
+            }
+        }
+    },
+    priority=90,
+    exact_match=False
+)
+
+# Natural Language Processing for Drill Logging
+class DrillLoggingProcessor:
+    """Processes natural language input for drill logging"""
+    
+    def __init__(self):
+        self.current_log_entry = {}
+        self.drilling_session = {
+            "start_time": None,
+            "entries": [],
+            "current_depth": 0,
+            "current_station": None
+        }
+    
+    def process_drilling_conversation(self, user_input: str) -> Dict[str, Any]:
+        """Convert natural speech to structured drill log data"""
+        
+        # Extract key information using regex patterns
+        extracted_data = self._extract_drilling_data(user_input)
+        
+        # Generate structured response
+        response = self._generate_structured_response(user_input, extracted_data)
+        
+        return response
+    
+    def _extract_drilling_data(self, text: str) -> Dict[str, Any]:
+        """Extract drilling parameters from natural language"""
+        
+        data = {}
+        text_lower = text.lower()
+        
+        # Station/Location patterns
+        station_match = re.search(r'station\s*(\d+\+\d+|\d+)', text_lower)
+        if station_match:
+            data['station'] = station_match.group(1)
+        
+        # Depth patterns
+        depth_match = re.search(r'(\d+\.?\d*)\s*(feet|ft|foot)', text_lower)
+        if depth_match:
+            data['depth'] = float(depth_match.group(1))
+            data['depth_unit'] = 'feet'
+        
+        # Angle patterns
+        angle_match = re.search(r'(\d+\.?\d*)\s*degree', text_lower)
+        if angle_match:
+            data['angle'] = float(angle_match.group(1))
+        
+        # Pressure patterns
+        pressure_match = re.search(r'(\d+\.?\d*)\s*(psi|pounds)', text_lower)
+        if pressure_match:
+            data['pressure'] = float(pressure_match.group(1))
+            data['pressure_unit'] = 'psi'
+        
+        # Flow rate patterns
+        flow_match = re.search(r'(\d+\.?\d*)\s*(gpm|gallons)', text_lower)
+        if flow_match:
+            data['flow_rate'] = float(flow_match.group(1))
+            data['flow_unit'] = 'gpm'
+        
+        # Mud conditions
+        if 'bentonite' in text_lower:
+            data['mud_type'] = 'bentonite'
+        if 'polymer' in text_lower:
+            data['mud_type'] = 'polymer'
+        
+        # Soil conditions
+        soil_conditions = []
+        if 'clay' in text_lower:
+            soil_conditions.append('clay')
+        if 'sand' in text_lower:
+            soil_conditions.append('sand')
+        if 'rock' in text_lower:
+            soil_conditions.append('rock')
+        if 'water' in text_lower:
+            soil_conditions.append('groundwater')
+        
+        if soil_conditions:
+            data['soil_conditions'] = soil_conditions
+        
+        # Operation type
+        if any(word in text_lower for word in ['starting', 'begin', 'entry']):
+            data['operation'] = 'entry'
+        elif any(word in text_lower for word in ['pullback', 'pulling', 'install']):
+            data['operation'] = 'pullback'
+        elif any(word in text_lower for word in ['steering', 'correction', 'adjust']):
+            data['operation'] = 'steering_correction'
+        
+        return data
+    
+    def _generate_structured_response(self, user_input: str, extracted_data: Dict) -> Dict[str, Any]:
+        """Generate a structured response with properly formatted log entry"""
+        
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # Create log entry
+        log_entry = {
+            "timestamp": timestamp,
+            "operator_notes": user_input,
+            "extracted_parameters": extracted_data,
+            "entry_type": extracted_data.get('operation', 'general_observation')
+        }
+        
+        # Generate confirmation message
+        confirmation_parts = [f"**{timestamp}** - Log entry recorded:"]
+        
+        if 'station' in extracted_data:
+            confirmation_parts.append(f"📍 Station: {extracted_data['station']}")
+        
+        if 'depth' in extracted_data:
+            confirmation_parts.append(f"📏 Depth: {extracted_data['depth']} {extracted_data.get('depth_unit', 'ft')}")
+        
+        if 'angle' in extracted_data:
+            confirmation_parts.append(f"📐 Angle: {extracted_data['angle']}°")
+        
+        if 'pressure' in extracted_data:
+            confirmation_parts.append(f"⚡ Pressure: {extracted_data['pressure']} {extracted_data.get('pressure_unit', 'psi')}")
+        
+        if 'flow_rate' in extracted_data:
+            confirmation_parts.append(f"💧 Flow: {extracted_data['flow_rate']} {extracted_data.get('flow_unit', 'gpm')}")
+        
+        if 'mud_type' in extracted_data:
+            confirmation_parts.append(f"🏺 Mud: {extracted_data['mud_type']}")
+        
+        if 'soil_conditions' in extracted_data:
+            confirmation_parts.append(f"🌍 Soil: {', '.join(extracted_data['soil_conditions'])}")
+        
+        # Add helpful follow-up questions
+        follow_up_questions = self._generate_follow_up_questions(extracted_data)
+        
+        confirmation_message = "\n".join(confirmation_parts)
+        if follow_up_questions:
+            confirmation_message += f"\n\n**Need to capture:** {follow_up_questions}"
+        
+        return {
+            "status": "success",
+            "answer": confirmation_message,
+            "classification": {
+                "category": "DRILL_LOGGING_ENTRY",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_LOGGING_ENTRY",
+                "query_type": "conversational_logging",
+                "render_type": "drill_logging_entry",
+                "log_entry": log_entry,
+                "extracted_data": extracted_data,
+                "drilling_context": {
+                    "session_active": True,
+                    "entry_count": len(self.drilling_session["entries"]) + 1,
+                    "timestamp": timestamp
+                }
+            }
+        }
+    
+    def _generate_follow_up_questions(self, extracted_data: Dict) -> str:
+        """Generate helpful follow-up questions based on what's missing"""
+        
+        missing_items = []
+        
+        if 'depth' not in extracted_data:
+            missing_items.append("current depth")
+        
+        if 'pressure' not in extracted_data and extracted_data.get('operation') != 'pullback':
+            missing_items.append("mud pressure")
+        
+        if 'flow_rate' not in extracted_data and extracted_data.get('operation') != 'pullback':
+            missing_items.append("flow rate")
+        
+        if extracted_data.get('operation') == 'pullback' and 'tension' not in extracted_data:
+            missing_items.append("pulling tension")
+        
+        if missing_items:
+            return f"Any {', '.join(missing_items)}?"
+        
+        return ""
+
+# Integration with your existing system
+def handle_drill_logging_query(query: str, conversation_context: Dict) -> Optional[Dict[str, Any]]:
+    """
+    Handle drill logging queries in your existing chat system
+    Add this function to your main query processing logic
+    """
+    
+    # Check if this is a drill logging conversation
+    drilling_patterns = [
+        r"(drill|drilling|bore|boring).*(log|logging|report)",
+        r"(starting|entry|pullback|mud|pressure|depth)",
+        r"station\s*\d+",
+        r"\d+\s*(feet|ft|degree|psi|gpm)"
+    ]
+    
+    is_drilling_query = any(re.search(pattern, query, re.IGNORECASE) for pattern in drilling_patterns)
+    
+    if not is_drilling_query:
+        return None
+    
+    # Initialize processor
+    processor = DrillLoggingProcessor()
+    
+    # Check if this is an initial drill logging request
+    if any(word in query.lower() for word in ['drill log', 'drilling log', 'bore log', 'log drilling']):
+        # Return the initial drill logging interface
+        return DRILL_LOGGING_RESPONSE.response_data
+    
+    # Otherwise, process as a conversational drill logging entry
+    return processor.process_drilling_conversation(query)
 
 # Contract Dispute Analysis Response
 HARDCODED_RESPONSES.append(
