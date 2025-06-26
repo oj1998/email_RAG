@@ -1169,45 +1169,7 @@ async def query_documents(request: QueryRequest):
         history_end = time.time()
         perf_logger.info(f"Load conversation history: {(history_end - history_start) * 1000:.2f}ms")
 
-        # THEN check drilling workflow (only if no hardcoded response)
-        drilling_start = time.time()
-        drilling_response = await process_drilling_workflow(
-            request=request,
-            conversation_context=conversation_context,
-            pool=pool
-        )
-        drilling_end = time.time()
-        perf_logger.info(f"Drilling workflow check: {(drilling_end - drilling_start) * 1000:.2f}ms")
-        
-        if drilling_response:
-            logger.info("Using drilling workflow response")
-            # Save the drilling workflow interaction
-            await conversation_handler.save_conversation_turn(
-                conversation_id=request.conversation_id,
-                role='user',
-                content=request.query,
-                metadata={
-                    "context": request.context.dict(),
-                    "query_type": "drilling_workflow",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-            
-            await conversation_handler.save_conversation_turn(
-                conversation_id=request.conversation_id,
-                role='assistant',
-                content=drilling_response["answer"],
-                metadata={
-                    "workflow_step": drilling_response.get("metadata", {}).get("workflow_step"),
-                    "classification": drilling_response.get("classification", {}),
-                    "metadata": drilling_response.get("metadata", {}),
-                    "query_type": "drilling_workflow",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-            
-            return drilling_response
-        
+       
         # Log the request details and routing decision factors
         logger.info(f"Processing query for conversation {request.conversation_id}: '{request.query}'")
         logger.info(f"Info sources: {request.info_sources}")
