@@ -1,4 +1,4 @@
-# hardcoded_responses.py
+# hardcoded_responses.py - FIXED VERSION
 from typing import Dict, Any, List, Optional
 import re
 from datetime import datetime
@@ -333,375 +333,6 @@ HARDCODED_RESPONSES.append(
     )
 )
 
-HARDCODED_RESPONSES.append(
-    HardcodedResponse(
-        query_pattern=r"(start|begin|initial|setup).*(drill|drilling|bore|boring)",
-        is_regex=True,
-        response_data={
-            "status": "success",
-            "answer": """# Drilling Setup Assistant Ready
-
-I'll help you set up your drilling operation step by step.
-
-## What I Need to Know:
-- **Station location** (e.g., "Station 15+50")
-- **Entry angle** (e.g., "12 degrees")
-- **Target depth** (e.g., "150 feet")
-- **Mud type** (bentonite, polymer, etc.)
-
-Just tell me what you have so far, like: "Starting at station 15+50 with 12 degree entry angle"
-
-**What's Next:** Once I have your parameters, I'll guide you through the bore entry checklist.""",
-            "classification": {
-                "category": "DRILL_WORKFLOW_SETUP",
-                "confidence": 1.0
-            },
-            "sources": [],
-            "metadata": {
-                "category": "DRILL_WORKFLOW_SETUP",
-                "query_type": "workflow", 
-                "render_type": "drill_workflow_step",
-                "workflow_step": "initial_setup",
-                "workflow_progress": {
-                    "current_step": "initial_setup",
-                    "completion_percentage": 10,
-                    "next_step": "bore_entry"
-                }
-            }
-        },
-        priority=95,  # High priority for workflow triggers
-        exact_match=False
-    )
-)
-
-# Drilling Quick Entry
-HARDCODED_RESPONSES.append(
-    HardcodedResponse(
-        query_pattern=r"drill.*(log|logging|start|begin)",
-        is_regex=True,
-        response_data={
-            "status": "success",
-            "answer": """# Ready to Log Your Drilling Operation
-
-I'm ready to document your drilling progress in real-time.
-
-**Quick Start Examples:**
-- "Starting bore at station 15+50, entry angle 12 degrees"
-- "At 50 feet depth, pressure 175 psi, good penetration"
-- "Hit clay layer at 120 feet, need steering correction"
-
-Just describe what's happening and I'll create the proper documentation format.""",
-            "classification": {
-                "category": "DRILL_LOGGING_CONVERSATIONAL", 
-                "confidence": 1.0
-            },
-            "sources": [],
-            "metadata": {
-                "category": "DRILL_LOGGING_CONVERSATIONAL",
-                "query_type": "conversational_logging",
-                "render_type": "drill_logging_interface"
-            }
-        },
-        priority=90,
-        exact_match=False
-    )
-)
-
-# Preset prompt patterns - these should catch common drilling scenarios
-PRESET_PATTERNS = [
-    # Pattern 1: "Set up drilling at station 15+50"
-    r"(set up|setup).*(drill|drilling).*(station|at)\s*(\d+)",
-    
-    # Pattern 2: "Begin drilling operation"
-    r"(begin|start).*(drill|drilling).*(operation|process|work)",
-    
-    # Pattern 3: "Drilling status update"
-    r"(drill|drilling).*(status|update|report|progress)",
-    
-    # Pattern 4: "Log drilling progress"
-    r"(log|logging).*(drill|drilling|progress|data)",
-]
-
-# Add this new hardcoded response to your HARDCODED_RESPONSES list
-HARDCODED_RESPONSES.append(
-    HardcodedResponse(
-        query_pattern=r"(drill|drilling|bore|boring).*(log|logging|report|documentation|record|mud|pullback|depth|pressure)",
-        is_regex=True,
-        response_data={
-            "status": "success",
-            "answer": """# Drill Logging Assistant Ready
-
-I'm here to help you document your drilling operation. Just tell me what's happening and I'll create the proper documentation.
-
-**Example:** "Starting bore at station 15+50, entry angle 12 degrees, using bentonite mud mix"
-
-## What I Can Help Document:
-- **Bore path data** - depth, angle, steering corrections
-- **Drilling parameters** - pressure, flow rates, penetration
-- **Mud tracking** - mixing ratios, returns, contamination
-- **Geological conditions** - soil types, obstructions, water
-- **Pullback operations** - tensions, speeds, cable integrity
-
-Just describe what's happening at your drill site and I'll format it properly for your records.""",
-            "classification": {
-                "category": "DRILL_LOGGING_CONVERSATIONAL",
-                "confidence": 1.0
-            },
-            "sources": [
-                {
-                    "id": "drilling-standards-2025",
-                    "title": "Directional Drilling Standards and Procedures",
-                    "page": 67,
-                    "confidence": 0.96,
-                    "excerpt": "All drilling operations must maintain detailed logs of bore path geometry, drilling parameters, and subsurface conditions for compliance and future reference."
-                }
-            ],
-            "metadata": {
-                "category": "DRILL_LOGGING_CONVERSATIONAL",
-                "query_type": "conversational_logging",
-                "render_type": "drill_logging_interface",  # ✅ ADD THIS LINE!
-                "logging_context": {
-                    "mode": "active_drilling",
-                    "documentation_type": "real_time_logging",
-                    "compliance_level": "municipal_utilities"
-                }
-            }
-        },
-        priority=90,
-        exact_match=False
-    )
-)
-
-# Natural Language Processing for Drill Logging
-class DrillLoggingProcessor:
-    """Processes natural language input for drill logging"""
-    
-    def __init__(self):
-        self.current_log_entry = {}
-        self.drilling_session = {
-            "start_time": None,
-            "entries": [],
-            "current_depth": 0,
-            "current_station": None
-        }
-    
-    def process_drilling_conversation(self, user_input: str) -> Dict[str, Any]:
-        """Convert natural speech to structured drill log data"""
-        
-        # Extract key information using regex patterns
-        extracted_data = self._extract_drilling_data(user_input)
-        
-        # Generate structured response
-        response = self._generate_structured_response(user_input, extracted_data)
-        
-        return response
-    
-    def _extract_drilling_data(self, text: str) -> Dict[str, Any]:
-        """Extract drilling parameters from natural language"""
-        
-        data = {}
-        text_lower = text.lower()
-        
-        # Station/Location patterns
-        station_match = re.search(r'station\s*(\d+\+\d+|\d+)', text_lower)
-        if station_match:
-            data['station'] = station_match.group(1)
-        
-        # Depth patterns
-        depth_match = re.search(r'(\d+\.?\d*)\s*(feet|ft|foot)', text_lower)
-        if depth_match:
-            data['depth'] = float(depth_match.group(1))
-            data['depth_unit'] = 'feet'
-        
-        # Angle patterns
-        angle_match = re.search(r'(\d+\.?\d*)\s*degree', text_lower)
-        if angle_match:
-            data['angle'] = float(angle_match.group(1))
-        
-        # Pressure patterns
-        pressure_match = re.search(r'(\d+\.?\d*)\s*(psi|pounds)', text_lower)
-        if pressure_match:
-            data['pressure'] = float(pressure_match.group(1))
-            data['pressure_unit'] = 'psi'
-        
-        # Flow rate patterns
-        flow_match = re.search(r'(\d+\.?\d*)\s*(gpm|gallons)', text_lower)
-        if flow_match:
-            data['flow_rate'] = float(flow_match.group(1))
-            data['flow_unit'] = 'gpm'
-        
-        # Mud conditions
-        if 'bentonite' in text_lower:
-            data['mud_type'] = 'bentonite'
-        if 'polymer' in text_lower:
-            data['mud_type'] = 'polymer'
-        
-        # Soil conditions
-        soil_conditions = []
-        if 'clay' in text_lower:
-            soil_conditions.append('clay')
-        if 'sand' in text_lower:
-            soil_conditions.append('sand')
-        if 'rock' in text_lower:
-            soil_conditions.append('rock')
-        if 'water' in text_lower:
-            soil_conditions.append('groundwater')
-        
-        if soil_conditions:
-            data['soil_conditions'] = soil_conditions
-        
-        # Operation type
-        if any(word in text_lower for word in ['starting', 'begin', 'entry']):
-            data['operation'] = 'entry'
-        elif any(word in text_lower for word in ['pullback', 'pulling', 'install']):
-            data['operation'] = 'pullback'
-        elif any(word in text_lower for word in ['steering', 'correction', 'adjust']):
-            data['operation'] = 'steering_correction'
-        
-        return data
-    
-    def _generate_structured_response(self, user_input: str, extracted_data: Dict) -> Dict[str, Any]:
-        """Generate a structured response with properly formatted log entry"""
-        
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        
-        # Create log entry
-        log_entry = {
-            "timestamp": timestamp,
-            "operator_notes": user_input,
-            "extracted_parameters": extracted_data,
-            "entry_type": extracted_data.get('operation', 'general_observation')
-        }
-        
-        # Generate confirmation message
-        confirmation_parts = [f"**{timestamp}** - Log entry recorded:"]
-        
-        if 'station' in extracted_data:
-            confirmation_parts.append(f"📍 Station: {extracted_data['station']}")
-        
-        if 'depth' in extracted_data:
-            confirmation_parts.append(f"📏 Depth: {extracted_data['depth']} {extracted_data.get('depth_unit', 'ft')}")
-        
-        if 'angle' in extracted_data:
-            confirmation_parts.append(f"📐 Angle: {extracted_data['angle']}°")
-        
-        if 'pressure' in extracted_data:
-            confirmation_parts.append(f"⚡ Pressure: {extracted_data['pressure']} {extracted_data.get('pressure_unit', 'psi')}")
-        
-        if 'flow_rate' in extracted_data:
-            confirmation_parts.append(f"💧 Flow: {extracted_data['flow_rate']} {extracted_data.get('flow_unit', 'gpm')}")
-        
-        if 'mud_type' in extracted_data:
-            confirmation_parts.append(f"🏺 Mud: {extracted_data['mud_type']}")
-        
-        if 'soil_conditions' in extracted_data:
-            confirmation_parts.append(f"🌍 Soil: {', '.join(extracted_data['soil_conditions'])}")
-        
-        # Add helpful follow-up questions
-        follow_up_questions = self._generate_follow_up_questions(extracted_data)
-        
-        confirmation_message = "\n".join(confirmation_parts)
-        if follow_up_questions:
-            confirmation_message += f"\n\n**Need to capture:** {follow_up_questions}"
-        
-        return {
-            "status": "success",
-            "answer": confirmation_message,
-            "classification": {
-                "category": "DRILL_LOGGING_ENTRY",
-                "confidence": 1.0
-            },
-            "sources": [],
-            "metadata": {
-                "category": "DRILL_LOGGING_ENTRY",
-                "query_type": "conversational_logging",
-                "render_type": "drill_logging_entry",
-                "log_entry": log_entry,
-                "extracted_data": extracted_data,
-                "drilling_context": {
-                    "session_active": True,
-                    "entry_count": len(self.drilling_session["entries"]) + 1,
-                    "timestamp": timestamp
-                }
-            }
-        }
-    
-    def _generate_follow_up_questions(self, extracted_data: Dict) -> str:
-        """Generate helpful follow-up questions based on what's missing"""
-        
-        missing_items = []
-        
-        if 'depth' not in extracted_data:
-            missing_items.append("current depth")
-        
-        if 'pressure' not in extracted_data and extracted_data.get('operation') != 'pullback':
-            missing_items.append("mud pressure")
-        
-        if 'flow_rate' not in extracted_data and extracted_data.get('operation') != 'pullback':
-            missing_items.append("flow rate")
-        
-        if extracted_data.get('operation') == 'pullback' and 'tension' not in extracted_data:
-            missing_items.append("pulling tension")
-        
-        if missing_items:
-            return f"Any {', '.join(missing_items)}?"
-        
-        return ""
-
-# Integration with your existing system
-def handle_drill_logging_query(query: str, conversation_context: Dict) -> Optional[Dict[str, Any]]:
-    """
-    Handle drill logging queries in your existing chat system
-    Add this function to your main query processing logic
-    """
-    
-    # Check if this is a drill logging conversation
-    drilling_patterns = [
-        r"(drill|drilling|bore|boring).*(log|logging|report)",
-        r"(starting|entry|pullback|mud|pressure|depth)",
-        r"station\s*\d+",
-        r"\d+\s*(feet|ft|degree|psi|gpm)"
-    ]
-    
-    is_drilling_query = any(re.search(pattern, query, re.IGNORECASE) for pattern in drilling_patterns)
-    
-    if not is_drilling_query:
-        return None
-    
-    # Initialize processor
-    processor = DrillLoggingProcessor()
-    
-    # Check if this is an initial drill logging request
-    if any(word in query.lower() for word in ['drill log', 'drilling log', 'bore log', 'log drilling']):
-        # Return the initial drill logging interface
-        return DRILL_LOGGING_RESPONSE.response_data
-    
-    # Otherwise, process as a conversational drill logging entry
-    return processor.process_drilling_conversation(query)
-
-HARDCODED_RESPONSES.append(
-    HardcodedResponse(
-        query_pattern="drill log",
-        is_regex=False,
-        exact_match=True,
-        response_data={
-            "status": "success",
-            "answer": "# Drill Logging Assistant Ready\n\nI'm ready to document your drilling progress...",
-            "classification": {
-                "category": "DRILL_LOGGING_CONVERSATIONAL",
-                "confidence": 1.0
-            },
-            "sources": [],
-            "metadata": {
-                "category": "DRILL_LOGGING_CONVERSATIONAL",
-                "query_type": "conversational_logging",
-                "render_type": "drill_logging_interface"  # ✅ This should work!
-            }
-        },
-        priority=100  # Highest priority
-    )
-)
-
 # Contract Dispute Analysis Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
@@ -751,97 +382,7 @@ According to Section 12.3 of the contract, substitutions require written approva
                     "type": "communication_analysis",
                     "project": "Westside",
                     "issue": "hvac_system_change"
-                },
-                "timeline_events": [
-                    {
-                        "id": "email-001",
-                        "date": "2025-04-01T09:23:15",
-                        "sender": "James Rodriguez",
-                        "recipient": "HVAC Contractors Inc.",
-                        "subject": "HVAC System Requirements for Westside Project",
-                        "content": "As per our discussions during the planning phase, please ensure the installed system meets the efficiency ratings specified in the contract. We need the Airflow 3000 model as agreed.",
-                        "system": "Outlook",
-                        "tags": ["requirements", "specifications"],
-                        "relevance": 0.95
-                    },
-                    {
-                        "id": "meeting-002",
-                        "date": "2025-04-05T14:30:00",
-                        "sender": "Project Meeting",
-                        "recipient": "All Team Members",
-                        "subject": "Weekly Progress Meeting - Minutes",
-                        "content": "During discussion of HVAC installation timeline, Sam mentioned potential supply chain issues with the Airflow 3000. Alternative options were discussed but no decision was made. Action item: James to follow up with HVAC Contractors about alternatives if needed.",
-                        "system": "Procore",
-                        "tags": ["meeting-minutes", "supply-issues"],
-                        "relevance": 0.88
-                    },
-                    {
-                        "id": "email-003",
-                        "date": "2025-04-06T11:42:53",
-                        "sender": "HVAC Contractors Inc.",
-                        "recipient": "Maria Chen",
-                        "subject": "RE: Westside Project - HVAC Options",
-                        "content": "Following yesterday's meeting, we're having trouble sourcing the Airflow 3000 within your timeline. We recommend the ThermalTech Pro which actually has better efficiency ratings and we can get it installed by the original deadline. It's a bit more expensive but a superior system. Let me know if you want to proceed with this option.",
-                        "system": "Outlook",
-                        "tags": ["alternative", "recommendation"],
-                        "relevance": 0.97
-                    },
-                    {
-                        "id": "chat-004",
-                        "date": "2025-04-06T15:17:22",
-                        "sender": "Maria Chen",
-                        "recipient": "HVAC Contractors Inc.",
-                        "subject": "Direct Message",
-                        "content": "The ThermalTech Pro sounds like a good alternative. If it's better quality and meets the deadline, it might be worth considering. Let me check with the team about the additional cost.",
-                        "system": "Teams",
-                        "tags": ["confirmation", "inquiry"],
-                        "relevance": 0.92
-                    },
-                    {
-                        "id": "sms-007",
-                        "date": "2025-04-12T09:23:11",
-                        "sender": "Site Supervisor",
-                        "recipient": "Project Manager",
-                        "subject": "SMS Message",
-                        "content": "HVAC team arrived with ThermalTech Pro units. Different from what I expected but they said it was approved. Should I let them proceed with installation?",
-                        "system": "Text Message",
-                        "tags": ["urgent", "decision-needed"],
-                        "relevance": 0.99
-                    },
-                    {
-                        "id": "chat-008",
-                        "date": "2025-04-12T09:31:47",
-                        "sender": "Project Manager",
-                        "recipient": "Site Supervisor",
-                        "subject": "Teams Chat",
-                        "content": "If they're ready to go and it meets our specs, let them proceed. We can't afford delays on the HVAC installation as it's on the critical path.",
-                        "system": "Teams",
-                        "tags": ["approval", "schedule-priority"],
-                        "relevance": 0.99
-                    }
-                ],
-                "conflict_points": [
-                    {
-                        "description": "Original system specification clearly stated as Airflow 3000 in initial communication",
-                        "eventIds": ["email-001"],
-                        "severity": "medium"
-                    },
-                    {
-                        "description": "Alternative system (ThermalTech Pro) discussed with Maria Chen, not the original requester (James)",
-                        "eventIds": ["email-003", "chat-004"],
-                        "severity": "high"
-                    },
-                    {
-                        "description": "No formal change order documentation created or distributed to project team",
-                        "eventIds": ["email-006", "document-005"],
-                        "severity": "high"
-                    },
-                    {
-                        "description": "Ambiguous approval given for installation without specific system confirmation",
-                        "eventIds": ["sms-007", "chat-008"],
-                        "severity": "medium"
-                    }
-                ]
+                }
             }
         },
         priority=70  # High priority but below emergency responses
@@ -887,49 +428,13 @@ Follow each diagnostic path carefully. If multiple issues are found, document al
                 "category": "ROLL_FORMING_TROUBLESHOOTING",
                 "confidence": 1.0
             },
-            "sources": [
-                {
-                    "id": "rf-manual-2025",
-                    "title": "Scotpanel Roll Forming Machine Technical Manual",
-                    "page": 87,
-                    "confidence": 0.95,
-                    "excerpt": "When troubleshooting inconsistent material thickness at edges, always begin by checking entry roller alignment. Misalignment of 0.2mm or greater can cause significant thickness variation at formed edges."
-                },
-                {
-                    "id": "tech-bulletin-42",
-                    "title": "Technical Bulletin: Edge Formation Quality",
-                    "page": 3,
-                    "confidence": 0.92,
-                    "excerpt": "For models produced between 2023-2024, verify the pressure sensors on forming stations 2-4 have been calibrated according to procedure TB-SP100-42. Uncalibrated sensors are responsible for 27% of reported edge quality issues."
-                },
-                {
-                    "id": "service-bulletin-2025-03",
-                    "title": "Field Service Bulletin: Edge Quality Issues",
-                    "page": 1,
-                    "confidence": 0.98,
-                    "excerpt": "All field technicians must document pre-adjustment measurements for warranty claims. Use service tablet to photograph alignment readings before making any adjustments."
-                }
-            ],
+            "sources": [],
             "metadata": {
                 "category": "ROLL_FORMING_TROUBLESHOOTING",
                 "query_type": "troubleshooting",
                 "render_type": "roll_forming_troubleshooter",
                 "machine_model": "Scotpanel",
-                "issue_description": "Inconsistent material thickness at edges - Customer experiencing quality rejections",
-                "service_context": {
-                    "customer_machine": {
-                        "model": "Scotpanel",
-                        "serial": "SP-2024-1285",
-                        "installation_date": "2024-01-15",
-                        "warranty_status": "Active",
-                        "last_service": "2025-03-12"
-                    },
-                    "customer_info": {
-                        "company": "Precision Metals Inc.",
-                        "location": "Cincinnati",
-                        "issue_priority": "High - Production Impacted"
-                    }
-                }
+                "issue_description": "Inconsistent material thickness at edges"
             }
         },
         priority=75,  # High priority
@@ -940,7 +445,6 @@ Follow each diagnostic path carefully. If multiple issues are found, document al
 # Roll Forming Machine Assembly Guide - Scotpanel
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
-        # Expanded pattern to catch more variations of questions about assembly
         query_pattern=r"(scotpanel|roll form|roll former|forming machine|panel former|metal former).*(assembly|build|construct|assemble|put together|installation|setup|guide|manual|instructions|procedure|steps|how to|align)",
         is_regex=True,
         response_data={
@@ -971,141 +475,37 @@ Each subassembly requires quality verification before proceeding to the next ste
                 "category": "ROLL_FORMER_ASSEMBLY",
                 "confidence": 1.0
             },
-            "sources": [
-                {
-                    "id": "rf-manual-2025",
-                    "title": "Scotpanel Roll Forming Machine Assembly Manual",
-                    "page": 12,
-                    "confidence": 0.95,
-                    "excerpt": "The assembly process requires precision alignment of all components. Tolerances tighter than 0.05mm must be maintained for proper machine operation. Always follow torque specifications to prevent premature component failure."
-                },
-                {
-                    "id": "rf-training-guide",
-                    "title": "Roll Former Assembly Training Guidelines",
-                    "page": 5,
-                    "confidence": 0.92,
-                    "excerpt": "Bearing installation is critical to machine performance. Use the induction heater to expand bearings for installation. Never exceed 120°C to avoid damaging bearing seals. Always measure bearing temperature before installation."
-                },
-                {
-                    "id": "rf-qc-procedures",
-                    "title": "Quality Control Procedures for Roll Former Assembly",
-                    "page": 8,
-                    "confidence": 0.94,
-                    "excerpt": "Document all critical measurements during assembly, including shaft alignments, bearing clearances, and roller gaps. These measurements must be recorded on the quality control checklist and included with the machine documentation package."
-                }
-            ],
+            "sources": [],
             "metadata": {
                 "category": "ROLL_FORMER_ASSEMBLY",
                 "query_type": "assembly_guide",
                 "render_type": "roll_former_assembly_navigator",
-                "machine_model": "Scotpanel",
-                "work_order": "WO-2025-1854",
-                "customer_name": "Precision Metals Inc.",
-                "assembly_station": "Station #4 - Drive Assembly",
-                "assembly_context": {
-                    "machine_details": {
-                        "model": "Scotpanel",
-                        "type": "Commercial Grade Roll Former",
-                        "production_date": "2025-04-15"
-                    }
-                }
+                "machine_model": "Scotpanel"
             }
         },
         priority=75,  # High priority
-        exact_match=False  # Allow for partial matches to increase flexibility
+        exact_match=False
     )
 )
 
-# Specific entry for bearing alignment questions - added for more detailed matching
-HARDCODED_RESPONSES.append(
-    HardcodedResponse(
-        query_pattern=r"(align|alignment|installing|setup|procedure|how|what).*(bearing|bearings|shaft|entry shaft|drive).*(scotpanel|roll form|roll former|panel form)",
-        is_regex=True,
-        response_data={
-            "status": "success",
-            "answer": """# Entry Shaft Bearing Alignment Procedure for Scotpanel
-
-This comprehensive guide provides step-by-step instructions for aligning entry shaft bearings on Scotpanel roll formers, ensuring proper tolerance and optimal performance.
-
-## Overview
-Proper bearing alignment is critical to achieving consistent material forming. This procedure includes preparation, installation, verification, and final testing to ensure your roll former operates within specifications.
-
-## Key Points
-- Complete procedure includes 10 detailed steps
-- Critical measurements must be documented
-- Special tools required from calibrated tools cabinet
-- Recent updates to bearing specifications (March 2025)""",
-            "classification": {
-                "category": "ROLL_FORMER_ASSEMBLY",
-                "confidence": 1.0
-            },
-            "sources": [
-                {
-                    "id": "16638744-42de-4393-bdf6-60e7f68762df",
-                    "title": "Scotpanel Bearing Alignment Procedure",
-                    "page": 12,
-                    "confidence": 0.98,
-                    "excerpt": "Entry shaft bearing alignment is critical to machine performance. Follow this procedure carefully to ensure proper alignment within specified tolerances."
-                },
-                {
-                    "id": "1f7e29e3-a8ee-40a4-b481-4407dc38a649",
-                    "title": "Scotpanel Troubleshooting Guide",
-                    "page": 25,
-                    "confidence": 0.85,
-                    "excerpt": "Many material forming issues can be traced to improper bearing alignment. Verify alignment per procedure in maintenance manual before addressing other potential causes."
-                }
-            ],
-            "metadata": {
-                "category": "ROLL_FORMER_ASSEMBLY",
-                "query_type": "assembly_guide",
-                "render_type": "roll_former_assembly_navigator",
-                "machine_model": "Scotpanel",
-                "work_order": "WO-2025-1854",
-                "customer_name": "Precision Metals Inc.",
-                "assembly_station": "Station #4 - Drive Assembly",
-                "assembly_context": {
-                    "machine_details": {
-                        "model": "Scotpanel",
-                        "type": "Commercial Grade Roll Former",
-                        "production_date": "2025-04-15"
-                    }
-                }
-            }
-        },
-        priority=85,  # Higher priority than general assembly questions
-        exact_match=False  # Allow for partial matches to increase flexibility
-    )
-)
+# ====== REMOVED ALL DRILLING-RELATED HARDCODED RESPONSES ======
+# The drilling workflow will now be handled entirely by drilling_workflow.py
+# which has proper multi-step workflow support
 
 # Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
     
-    # ADD THIS DEBUGGING CODE HERE - RIGHT AT THE START OF THE FUNCTION
-    pattern1 = r"drill.*(log|logging|start|begin)"
-    pattern2 = r"(drill|drilling|bore|boring).*(log|logging|report|documentation|record|mud|pullback|depth|pressure)"
-    
-    print(f"🔍 DEBUGGING PATTERN MATCHING:")
-    print(f"Query: '{query}'")
-    print(f"Pattern 1 match: {bool(re.search(pattern1, query, re.IGNORECASE))}")
-    print(f"Pattern 2 match: {bool(re.search(pattern2, query, re.IGNORECASE))}")
-    print(f"Query lowercase: '{query.lower()}'")
-    
-    # EXISTING CODE CONTINUES BELOW
     matching_responses = []
     
     for response in HARDCODED_RESPONSES:
         if response.matches(query):
             matching_responses.append(response)
-            print(f"✅ MATCHED: {response.query_pattern} (priority: {response.priority})")
     
     if not matching_responses:
-        print(f"❌ NO MATCHES for query: {query}")
         return None
     
     # Return the highest priority response
     selected = sorted(matching_responses, key=lambda x: x.priority, reverse=True)[0]
-    print(f"🎯 SELECTED: {selected.query_pattern} (priority: {selected.priority})")
-    print(f"📋 METADATA: {selected.response_data.get('metadata', {})}")
     
     return selected.response_data
