@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 import asyncio
 from contextlib import asynccontextmanager
 from email_adapter import get_email_qa_system, process_email_query as adapter_process_email_query, is_email_query as adapter_is_email_query
+from drilling_workflow import process_drilling_workflow
 
 # Import email-related components
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -52,6 +53,7 @@ from rate_limiter import gpt4_limiter, gpt35_limiter, embeddings_limiter, rate_l
 
 import time
 from hardcoded_responses import get_hardcoded_response
+from langchain.chains import ConversationChain  # This is missing and causing the error
 
 # Add this to bubble_backend.py near the top with your other logging setup
 perf_logger = logging.getLogger("timing")
@@ -189,6 +191,19 @@ async def lifespan(app: FastAPI):
             statement_cache_size=0
         )
         logger.info("Database pool created successfully")
+
+        async with pool.acquire() as conn:
+            logger.info("Creating drilling workflow tables...")
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS drilling_sessions (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id TEXT NOT NULL UNIQUE,
+                    workflow_data JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            logger.info("Drilling workflow tables created successfully")
         
         # Verify/create database tables
         async with pool.acquire() as conn:
@@ -1126,6 +1141,44 @@ async def query_documents(request: QueryRequest):
         )
         history_end = time.time()
         perf_logger.info(f"Load conversation history: {(history_end - history_start) * 1000:.2f}ms")
+
+        drilling_start = time.time()
+        drilling_response = await process_drilling_workflow(
+            request=request,
+            conversation_context=conversation_context,
+            pool=pool
+        )
+        drilling_end = time.time()
+        perf_logger.info(f"Drilling workflow check: {(drilling_end - drilling_start) * 1000:.2f}ms")
+        
+        if drilling_response:
+            logger.info("Using drilling workflow response")
+            # Save the drilling workflow interaction
+            await conversation_handler.save_conversation_turn(
+                conversation_id=request.conversation_id,
+                role='user',
+                content=request.query,
+                metadata={
+                    "context": request.context.dict(),
+                    "query_type": "drilling_workflow",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+            
+            await conversation_handler.save_conversation_turn(
+                conversation_id=request.conversation_id,
+                role='assistant',
+                content=drilling_response["answer"],
+                metadata={
+                    "workflow_step": drilling_response.get("metadata", {}).get("workflow_step"),
+                    "classification": drilling_response.get("classification", {}),
+                    "metadata": drilling_response.get("metadata", {}),
+                    "query_type": "drilling_workflow",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+            
+            return drilling_response
         
         # Log the request details and routing decision factors
         logger.info(f"Processing query for conversation {request.conversation_id}: '{request.query}'")
