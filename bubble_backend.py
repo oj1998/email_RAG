@@ -178,6 +178,8 @@ class ProcessRequest(BaseModel):
 # Part 2: FastAPI Setup and NLP Transformer
 
 # Startup and shutdown events manager
+# In your bubble_backend.py, fix the lifespan function:
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pool, vector_store, conversation_handler, classifier
@@ -191,23 +193,12 @@ async def lifespan(app: FastAPI):
             statement_cache_size=0
         )
         logger.info("Database pool created successfully")
-
-        async with pool.acquire() as conn:
-            logger.info("Creating drilling workflow tables...")
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS drilling_sessions (
-                    id SERIAL PRIMARY KEY,
-                    conversation_id TEXT NOT NULL UNIQUE,
-                    workflow_data JSONB NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            logger.info("Drilling workflow tables created successfully")
         
-        # Verify/create database tables
+        # Verify/create database tables - DO ALL TABLES HERE TOGETHER
         async with pool.acquire() as conn:
             logger.info("Verifying database tables...")
+            
+            # Create messages table
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id SERIAL PRIMARY KEY,
@@ -218,6 +209,18 @@ async def lifespan(app: FastAPI):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            
+            # Create drilling sessions table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS drilling_sessions (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id TEXT NOT NULL UNIQUE,
+                    workflow_data JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
             # Add verification for pgvector extension
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
             logger.info("Database tables verified/created successfully")
