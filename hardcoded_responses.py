@@ -333,6 +333,95 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(start|begin|initial|setup).*(drill|drilling|bore|boring)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Drilling Setup Assistant Ready
+
+I'll help you set up your drilling operation step by step.
+
+## What I Need to Know:
+- **Station location** (e.g., "Station 15+50")
+- **Entry angle** (e.g., "12 degrees")
+- **Target depth** (e.g., "150 feet")
+- **Mud type** (bentonite, polymer, etc.)
+
+Just tell me what you have so far, like: "Starting at station 15+50 with 12 degree entry angle"
+
+**What's Next:** Once I have your parameters, I'll guide you through the bore entry checklist.""",
+            "classification": {
+                "category": "DRILL_WORKFLOW_SETUP",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_WORKFLOW_SETUP",
+                "query_type": "workflow", 
+                "render_type": "drill_workflow_step",
+                "workflow_step": "initial_setup",
+                "workflow_progress": {
+                    "current_step": "initial_setup",
+                    "completion_percentage": 10,
+                    "next_step": "bore_entry"
+                }
+            }
+        },
+        priority=95,  # High priority for workflow triggers
+        exact_match=False
+    )
+)
+
+# Drilling Quick Entry
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"drill.*(log|logging|start|begin)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Ready to Log Your Drilling Operation
+
+I'm ready to document your drilling progress in real-time.
+
+**Quick Start Examples:**
+- "Starting bore at station 15+50, entry angle 12 degrees"
+- "At 50 feet depth, pressure 175 psi, good penetration"
+- "Hit clay layer at 120 feet, need steering correction"
+
+Just describe what's happening and I'll create the proper documentation format.""",
+            "classification": {
+                "category": "DRILL_LOGGING_CONVERSATIONAL", 
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_LOGGING_CONVERSATIONAL",
+                "query_type": "conversational_logging",
+                "render_type": "drill_logging_interface"
+            }
+        },
+        priority=90,
+        exact_match=False
+    )
+)
+
+# Preset prompt patterns - these should catch common drilling scenarios
+PRESET_PATTERNS = [
+    # Pattern 1: "Set up drilling at station 15+50"
+    r"(set up|setup).*(drill|drilling).*(station|at)\s*(\d+)",
+    
+    # Pattern 2: "Begin drilling operation"
+    r"(begin|start).*(drill|drilling).*(operation|process|work)",
+    
+    # Pattern 3: "Drilling status update"
+    r"(drill|drilling).*(status|update|report|progress)",
+    
+    # Pattern 4: "Log drilling progress"
+    r"(log|logging).*(drill|drilling|progress|data)",
+]
+
 # Add this new hardcoded response to your HARDCODED_RESPONSES list
 DRILL_LOGGING_RESPONSE = HardcodedResponse(
     query_pattern=r"(drill|drilling|bore|boring).*(log|logging|report|documentation|record|mud|pullback|depth|pressure)",
