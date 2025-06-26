@@ -75,6 +75,355 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(drill|drilling).*(log|logging|report|document|new project|start project)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# AI Drilling Log Assistant
+
+I'm ready to help you create a comprehensive drilling report. I'll guide you through capturing all the necessary data and generate professional documentation.
+
+**What I'll help you document:**
+- Project setup and permit information
+- Real-time drilling progress and conditions
+- Soil classifications and geological data
+- Equipment performance and fluid usage
+- Safety incidents and steering corrections
+- Final installation details and compliance
+
+**To get started, I need some basic project information:**
+
+Tell me about your drilling project - location, type of installation, or just say "new bore project" and I'll walk you through the setup questions.""",
+            "classification": {
+                "category": "DRILL_LOG_INITIALIZATION",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_LOG_INITIALIZATION",
+                "query_type": "drilling_log",
+                "render_type": "log_initialization",
+                "log_phase": "initialization",
+                "current_step": 1,
+                "total_steps": 6
+            }
+        },
+        priority=90,
+        exact_match=False
+    )
+)
+
+# 2. Project Setup Details
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(new bore project|project setup|fiber installation|utility installation|conduit install)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Project Setup - Creating Drilling Log
+
+**Project Initialized**: Directional Bore Installation
+
+I've started a new drilling log and captured these initial details:
+
+**Project Information:**
+📍 **Location**: 1247 Industrial Parkway, Fort Wayne, IN
+📋 **Permit #**: DIG-2025-0847 (Active)
+👷 **Crew Lead**: Sarah Martinez
+🚛 **Equipment**: Vermeer D36x50 Navigator
+🌤️ **Weather**: 68°F, Clear, Light winds
+📅 **Start Time**: 09:15 AM
+
+**Installation Specs:**
+- **Bore Length**: 285 feet
+- **Product**: 4" HDPE conduit for fiber optic cable
+- **Entry Angle**: 12 degrees
+- **Target Depth**: 8 feet at utility crossing
+
+**Next Step**: Begin drilling operations and I'll log your progress in real-time.
+
+Ready to start? Just tell me when you begin the bore entry.""",
+            "classification": {
+                "category": "DRILL_PROJECT_SETUP",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_PROJECT_SETUP",
+                "query_type": "drilling_log",
+                "render_type": "project_setup",
+                "log_phase": "setup",
+                "current_step": 2,
+                "total_steps": 6,
+                "project_data": {
+                    "permit_number": "DIG-2025-0847",
+                    "crew_lead": "Sarah Martinez",
+                    "equipment": "Vermeer D36x50",
+                    "bore_length": 285,
+                    "product_type": "4_inch_hdpe"
+                }
+            }
+        },
+        priority=92,
+        exact_match=False
+    )
+)
+
+# 3. Real-Time Progress Logging
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(at \d+|depth|feet|progress|drilling|bore entry|penetration|mud pressure)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Progress Entry Logged - 10:47 AM
+
+**Current Status**: Active drilling in progress
+
+I've captured and formatted your drilling progress:
+
+**Drilling Parameters:**
+- **Current Depth**: 125 feet (44% to target)
+- **Mud Pressure**: 175 psi (normal range)
+- **Flow Rate**: 85 gpm
+- **Drilling Rate**: 42 ft/hr (excellent)
+- **Steering**: On grade ±0.2 feet
+
+**Geological Log:**
+- **0-45 ft**: Sandy soil, good penetration
+- **45-85 ft**: Clay layer, increased pressure
+- **85-125 ft**: Mixed soil, normal conditions
+
+**AI Analysis**: 
+✓ Drilling parameters within optimal range
+✓ On schedule for 2:30 PM completion
+✓ No steering corrections needed
+⚠️ Monitor pressure if clay layer continues
+
+**Auto-calculated**: Remaining time ~3.2 hours, fluid usage tracking normal.
+
+Continue drilling and update me at your next checkpoint.""",
+            "classification": {
+                "category": "DRILL_PROGRESS_LOGGING",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_PROGRESS_LOGGING",
+                "query_type": "drilling_log",
+                "render_type": "progress_logging",
+                "log_phase": "active_drilling",
+                "current_step": 3,
+                "total_steps": 6,
+                "progress_data": {
+                    "current_depth": 125,
+                    "target_depth": 285,
+                    "completion_percentage": 44,
+                    "drilling_rate": 42,
+                    "pressure": 175,
+                    "flow_rate": 85
+                }
+            }
+        },
+        priority=88,
+        exact_match=False
+    )
+)
+
+# 4. Problem Documentation & Steering
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(steering|correction|problem|issue|drift|off grade|alignment|trouble)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Incident Logged - Steering Correction Required
+
+**Issue Documentation**: 11:23 AM
+
+I've documented this technical issue and resolution:
+
+**Problem Identified:**
+- **Location**: 185 feet depth
+- **Issue**: Bore drifting 2.5° left of target line
+- **Cause**: Encountered unexpected rock formation
+- **Detection Method**: Walkover locating system
+
+**Corrective Action Taken:**
+- **Steering Applied**: 4° right correction
+- **Duration**: 15 minutes
+- **Method**: Reduced flow rate, adjusted toolface
+- **Verification**: Walkover confirmed return to grade
+
+**Impact Assessment:**
+- **Schedule**: +20 minutes (minimal impact)
+- **Cost**: Within normal parameters
+- **Quality**: Grade tolerance maintained
+
+**AI Documentation**: 
+✓ Photos captured with GPS coordinates
+✓ Incident report auto-generated
+✓ Regulatory compliance maintained
+✓ Added to final report appendix
+
+**Status**: Issue resolved, continuing bore to exit point.""",
+            "classification": {
+                "category": "DRILL_PROBLEM_DOCUMENTATION",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_PROBLEM_DOCUMENTATION",
+                "query_type": "drilling_log",
+                "render_type": "problem_documentation",
+                "log_phase": "problem_solving",
+                "current_step": 4,
+                "total_steps": 6,
+                "incident_data": {
+                    "type": "steering_correction",
+                    "location": 185,
+                    "severity": "minor",
+                    "duration_minutes": 20,
+                    "resolution": "successful"
+                }
+            }
+        },
+        priority=94,
+        exact_match=False
+    )
+)
+
+# 5. Installation & Pullback Documentation
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(pullback|pulling|installation|install|product|pipe|conduit|cable)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Product Installation - Pullback Phase
+
+**Installation Documentation**: 2:15 PM
+
+I'm tracking your product installation in real-time:
+
+**Pullback Progress:**
+- **Product Type**: 285 ft of 4" HDPE conduit
+- **Progress**: 180 feet pulled (63% complete)
+- **Pulling Force**: 2,800 lbs (within 4,200 lb limit)
+- **Installation Rate**: 95 ft/hr
+- **ETA Completion**: 3:05 PM
+
+**Quality Monitoring:**
+✓ Conduit integrity verified every 50 feet
+✓ Continuous mud circulation maintained
+✓ No binding or excessive force detected
+✓ Exit point preparation confirmed
+
+**AI Tracking:**
+- **GPS waypoints** recorded every 25 feet
+- **Force measurements** logged continuously  
+- **Photo documentation** at key points
+- **Compliance checklist** automatically updated
+
+**Installation Checklist:**
+✓ Pre-pullback inspection complete
+✓ Reamer size verified (6" for 4" product)
+✓ Pulling head properly attached
+✓ Emergency stop procedures briefed
+
+**Next**: Continue monitoring pullback to completion.""",
+            "classification": {
+                "category": "DRILL_INSTALLATION_LOGGING",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_INSTALLATION_LOGGING",
+                "query_type": "drilling_log",
+                "render_type": "installation_logging",
+                "log_phase": "installation",
+                "current_step": 5,
+                "total_steps": 6,
+                "installation_data": {
+                    "product_type": "4_inch_hdpe",
+                    "total_length": 285,
+                    "pulled_length": 180,
+                    "pulling_force": 2800,
+                    "max_force": 4200,
+                    "progress_percentage": 63
+                }
+            }
+        },
+        priority=89,
+        exact_match=False
+    )
+)
+
+# 6. Final Report Generation
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(complete|completed|finished|final report|generate report|done|wrap up)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Final Drilling Report Generated ✅
+
+**Project Completion**: 3:12 PM - All objectives achieved
+
+I've compiled your comprehensive drilling report with full documentation:
+
+**Executive Summary:**
+- **Total Time**: 6 hours 2 minutes (2 min ahead of schedule)
+- **Installation**: 285 feet of 4" HDPE conduit successfully installed
+- **Quality**: All specifications met, grade tolerance ±0.2 feet
+- **Incidents**: 1 minor steering correction (resolved)
+- **Compliance**: 100% regulatory requirements satisfied
+
+**Generated Documentation:**
+📋 **Drilling Log** - Complete chronological record
+📊 **Progress Charts** - Visual drilling profile and timeline  
+📷 **Photo Package** - 47 images with GPS coordinates
+📋 **Incident Report** - Steering correction details
+📄 **Compliance Certificate** - Regulatory sign-offs
+💾 **Digital Backup** - All data archived for 7 years
+
+**Report Distribution:**
+✓ Project manager notified
+✓ Permit office filing complete
+✓ Customer copy prepared
+✓ Equipment maintenance log updated
+
+**AI Learning**: I've added this project data to improve future drilling predictions and recommendations.
+
+**Files Ready**: Download links sent to your project management system.""",
+            "classification": {
+                "category": "DRILL_REPORT_GENERATION",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_REPORT_GENERATION",
+                "query_type": "drilling_log",
+                "render_type": "report_generation",
+                "log_phase": "completion",
+                "current_step": 6,
+                "total_steps": 6,
+                "completion_data": {
+                    "total_time_hours": 6.03,
+                    "schedule_variance": -2,
+                    "incidents_count": 1,
+                    "compliance_percentage": 100,
+                    "photos_captured": 47
+                }
+            }
+        },
+        priority=87,
+        exact_match=False
+    )
+)
+
 # Add these to hardcoded_responses.py - Simplified Independent Drilling Responses
 
 # 1. Initial Drilling Setup Request
