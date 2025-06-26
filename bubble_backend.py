@@ -695,12 +695,7 @@ async def process_document_query(
             raise HTTPException(status_code=503, detail="Service not fully initialized")
     
         try:
-            # Check for hardcoded responses FIRST
-            hardcoded_response = get_hardcoded_response(request.query)
-            if hardcoded_response:
-                logger.info(f"Using hardcoded response for query: '{request.query}'")
-                perf_logger.info(f"Hardcoded response - bypassing normal processing: {time.time() - total_start:.4f}s")
-                return hardcoded_response
+            # REMOVED: hardcoded response check - now handled at main endpoint level
             
             # Question classification
             classification_start = time.time()
@@ -724,14 +719,10 @@ async def process_document_query(
             intent_end = time.time()
             perf_logger.info(f"Intent analysis: {(intent_end - intent_start) * 1000:.2f}ms")
     
+            # Continue with rest of your existing logic...
             # Check for comparison queries (which we'll now route to variance analysis)
             routing_start = time.time()
             is_comparison = False
-            #if hasattr(classification, 'suggested_format') and classification.suggested_format:
-                #is_comparison = classification.suggested_format.get("is_comparison", False)
-                # Add detailed logging
-                #logger.info(f"Classification details - Category: {classification.category}, is_comparison: {is_comparison}")
-                #logger.info(f"Full suggested_format: {classification.suggested_format}")
             
             # Log the final routing decision with reasoning
             variance_match = is_variance_analysis_query(request.query)
@@ -1132,11 +1123,44 @@ async def download_file(file_url: str) -> bytes:
         raise HTTPException(status_code=500, detail=str(e))
 
 # Main query endpoint that routes to appropriate handler
+# Main query endpoint that routes to appropriate handler
 @query_router.post("/query")
 async def query_documents(request: QueryRequest):
     """Enhanced main query endpoint with conversation history and classification"""
     total_start = time.time()
     try:
+        # CHECK FOR HARDCODED RESPONSES FIRST - BEFORE ANY OTHER PROCESSING
+        hardcoded_response = get_hardcoded_response(request.query)
+        if hardcoded_response:
+            logger.info(f"Using hardcoded response for query: '{request.query}'")
+            perf_logger.info(f"Hardcoded response - bypassing normal processing: {time.time() - total_start:.4f}s")
+            
+            # Save the interaction
+            await conversation_handler.save_conversation_turn(
+                conversation_id=request.conversation_id,
+                role='user',
+                content=request.query,
+                metadata={
+                    "context": request.context.dict(),
+                    "query_type": "hardcoded",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+            
+            await conversation_handler.save_conversation_turn(
+                conversation_id=request.conversation_id,
+                role='assistant',
+                content=hardcoded_response["answer"],
+                metadata={
+                    "classification": hardcoded_response.get("classification", {}),
+                    "metadata": hardcoded_response.get("metadata", {}),
+                    "query_type": "hardcoded",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+            
+            return hardcoded_response
+
         # Load conversation history
         history_start = time.time()
         conversation_context = await conversation_handler.load_conversation_history(
@@ -1145,6 +1169,7 @@ async def query_documents(request: QueryRequest):
         history_end = time.time()
         perf_logger.info(f"Load conversation history: {(history_end - history_start) * 1000:.2f}ms")
 
+        # THEN check drilling workflow (only if no hardcoded response)
         drilling_start = time.time()
         drilling_response = await process_drilling_workflow(
             request=request,
