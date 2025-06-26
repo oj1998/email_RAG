@@ -423,12 +423,13 @@ PRESET_PATTERNS = [
 ]
 
 # Add this new hardcoded response to your HARDCODED_RESPONSES list
-DRILL_LOGGING_RESPONSE = HardcodedResponse(
-    query_pattern=r"(drill|drilling|bore|boring).*(log|logging|report|documentation|record|mud|pullback|depth|pressure)",
-    is_regex=True,
-    response_data={
-        "status": "success",
-        "answer": """# Drill Logging Assistant Ready
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(drill|drilling|bore|boring).*(log|logging|report|documentation|record|mud|pullback|depth|pressure)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Drill Logging Assistant Ready
 
 I'm here to help you document your drilling operation. Just tell me what's happening and I'll create the proper documentation.
 
@@ -442,32 +443,33 @@ I'm here to help you document your drilling operation. Just tell me what's happe
 - **Pullback operations** - tensions, speeds, cable integrity
 
 Just describe what's happening at your drill site and I'll format it properly for your records.""",
-        "classification": {
-            "category": "DRILL_LOGGING_CONVERSATIONAL",
-            "confidence": 1.0
+            "classification": {
+                "category": "DRILL_LOGGING_CONVERSATIONAL",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "drilling-standards-2025",
+                    "title": "Directional Drilling Standards and Procedures",
+                    "page": 67,
+                    "confidence": 0.96,
+                    "excerpt": "All drilling operations must maintain detailed logs of bore path geometry, drilling parameters, and subsurface conditions for compliance and future reference."
+                }
+            ],
+            "metadata": {
+                "category": "DRILL_LOGGING_CONVERSATIONAL",
+                "query_type": "conversational_logging",
+                "render_type": "drill_logging_interface",  # ✅ ADD THIS LINE!
+                "logging_context": {
+                    "mode": "active_drilling",
+                    "documentation_type": "real_time_logging",
+                    "compliance_level": "municipal_utilities"
+                }
+            }
         },
-        "sources": [
-            {
-                "id": "drilling-standards-2025",
-                "title": "Directional Drilling Standards and Procedures",
-                "page": 67,
-                "confidence": 0.96,
-                "excerpt": "All drilling operations must maintain detailed logs of bore path geometry, drilling parameters, and subsurface conditions for compliance and future reference."
-            }
-        ],
-        "metadata": {
-            "category": "DRILL_LOGGING_CONVERSATIONAL",
-            "query_type": "conversational_logging",
-            "render_type": "drill_logging_interface",
-            "logging_context": {
-                "mode": "active_drilling",
-                "documentation_type": "real_time_logging",
-                "compliance_level": "municipal_utilities"
-            }
-        }
-    },
-    priority=90,
-    exact_match=False
+        priority=90,
+        exact_match=False
+    )
 )
 
 # Natural Language Processing for Drill Logging
