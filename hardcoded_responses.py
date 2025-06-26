@@ -75,6 +75,306 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+# Add these to hardcoded_responses.py - Simplified Independent Drilling Responses
+
+# 1. Initial Drilling Setup Request
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(drill|drilling|bore|boring).*(log|logging|record|document|start|setup|begin)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Drill Logging Assistant Ready
+
+I'm ready to document your drilling progress in real-time.
+
+**Quick Start Examples:**
+- "Starting bore at station 15+50, entry angle 12 degrees"
+- "At 50 feet depth, pressure 175 psi, good penetration"
+- "Hit clay layer at 120 feet, need steering correction"
+
+Just describe what's happening and I'll create the proper documentation format.
+
+**Voice Input Available** - Use the microphone button for hands-free logging while operating equipment.""",
+            "classification": {
+                "category": "DRILL_LOGGING_INTERFACE",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_LOGGING_INTERFACE",
+                "query_type": "drilling_workflow",
+                "render_type": "drill_logging_interface",
+                "drilling_context": {
+                    "mode": "logging_ready",
+                    "session_active": True,
+                    "timestamp": datetime.now().strftime("%H:%M:%S")
+                }
+            }
+        },
+        priority=85,
+        exact_match=False
+    )
+)
+
+# 2. Drilling Setup/Entry Parameters
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(starting|begin|entry|station|setup).*(bore|drill|drilling).*(station|angle|depth)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Drilling Setup Recorded
+
+**Entry Parameters Logged:**
+📍 **Station**: 15+50 (as specified)
+📐 **Entry Angle**: 12 degrees
+🎯 **Target Depth**: 250 feet
+🏺 **Mud System**: Bentonite polymer mix
+
+**Pre-Entry Checklist:**
+✓ Verify drill head position at entry point
+✓ Confirm entry angle setting (12°)
+✓ Test mud circulation system
+✓ Check locating equipment signal
+
+**Ready for bore entry** - Report depth readings every 10 feet once penetration begins.
+
+**Quick Actions:**
+- "At 10 feet, good penetration"
+- "Hit resistance at 25 feet"
+- "Need steering correction"
+""",
+            "classification": {
+                "category": "DRILL_SETUP_ENTRY",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_SETUP_ENTRY",
+                "query_type": "drilling_workflow",
+                "render_type": "drill_setup_entry",
+                "extracted_parameters": {
+                    "station": "15+50",
+                    "entry_angle": 12,
+                    "target_depth": 250,
+                    "mud_type": "bentonite_polymer"
+                }
+            }
+        },
+        priority=90,
+        exact_match=False
+    )
+)
+
+# 3. Active Drilling Progress Reports
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(at|depth|feet|ft).*(depth|feet|ft).*(pressure|psi|flow|conditions|penetration)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Drilling Log Entry Recorded
+
+**⏰ 14:23:17** - Active drilling progress documented:
+
+📏 **Current Depth**: 120 feet
+⚡ **Mud Pressure**: 175 psi
+💧 **Flow Rate**: 85 gpm
+🌍 **Soil Conditions**: Clay layer encountered
+🎯 **Steering Status**: On grade, no correction needed
+
+**Progress Status**: 48% complete to target depth
+**Next Milestone**: Report at 150 feet
+
+**Quick Follow-up Options:**
+- Continue normal drilling operations
+- Report steering correction needed
+- Document equipment issue
+- Log soil condition change""",
+            "classification": {
+                "category": "DRILL_PROGRESS_LOG",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_PROGRESS_LOG",
+                "query_type": "drilling_workflow", 
+                "render_type": "drill_progress_log",
+                "log_entry": {
+                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                    "depth": 120,
+                    "pressure": 175,
+                    "flow_rate": 85,
+                    "soil_conditions": ["clay"],
+                    "steering_status": "on_grade"
+                }
+            }
+        },
+        priority=88,
+        exact_match=False
+    )
+)
+
+# 4. Steering Correction Needed
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(steering|correction|adjust|drift|off.grade|alignment)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Steering Correction Protocol
+
+**⚠️ Steering Issue Logged** - 14:25:43
+
+**Problem Identified:**
+- Bore drifting 2 degrees left of target
+- Detected at 145 feet depth
+- Correction required to maintain grade
+
+**Correction Applied:**
+✓ Steering adjustment: 3 degrees right
+✓ New heading: 87 degrees (target: 85 degrees)
+✓ Locating signal verified
+
+**Monitoring Protocol:**
+- Verify correction at 25-foot intervals
+- Next check point: 170 feet
+- Document grade achievement
+
+**Status**: Correction applied, resuming drilling
+**Action Required**: Monitor and report position at next depth milestone""",
+            "classification": {
+                "category": "DRILL_STEERING_CORRECTION",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_STEERING_CORRECTION",
+                "query_type": "drilling_workflow",
+                "render_type": "drill_steering_correction",
+                "correction_data": {
+                    "drift_direction": "left",
+                    "drift_amount": 2,
+                    "correction_applied": 3,
+                    "new_heading": 87,
+                    "target_heading": 85
+                }
+            }
+        },
+        priority=92,
+        exact_match=False
+    )
+)
+
+# 5. Pullback/Installation Phase
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(pullback|pulling|install|installation|product|pipe|cable)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Pullback Operation Status
+
+**🔄 Active Pullback in Progress**
+
+**Current Status:**
+📏 **Product Pulled**: 180 feet of 250 feet total
+⚡ **Pulling Tension**: 2,400 lbs (within 3,500 lb limit)
+💧 **Mud Flow**: 95 gpm circulation maintained
+🎯 **Progress**: 72% complete
+
+**Critical Monitoring:**
+- Tension readings logged every 50 feet
+- Product integrity verified at entry point
+- No binding or resistance detected
+- Mud returns quality: Normal
+
+**Next Check Points:**
+- 200 feet: Verify tension and progress
+- 225 feet: Prepare for final pull sequence
+- 250 feet: Complete installation and secure
+
+**Status**: Normal pullback operations continuing""",
+            "classification": {
+                "category": "DRILL_PULLBACK_ACTIVE",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_PULLBACK_ACTIVE",
+                "query_type": "drilling_workflow",
+                "render_type": "drill_pullback_active",
+                "pullback_data": {
+                    "product_pulled": 180,
+                    "total_length": 250,
+                    "tension": 2400,
+                    "max_tension": 3500,
+                    "progress_percentage": 72
+                }
+            }
+        },
+        priority=89,
+        exact_match=False
+    )
+)
+
+# 6. Completion/Success
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(complete|completed|finished|done|success)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Drilling Operation Complete ✅
+
+**🎉 Installation Successfully Completed**
+
+**Final Summary:**
+- **Total Bore Length**: 250 feet
+- **Installation Time**: 4.5 hours
+- **Product Installed**: 250 feet of 6" HDPE conduit
+- **Final Grade Achieved**: ±0.2 feet (within tolerance)
+
+**Quality Verification:**
+✓ Product functionality tested - PASS
+✓ Bore abandonment completed
+✓ Entry and exit points secured
+✓ Equipment demobilization complete
+
+**Documentation Status:**
+✓ Drilling log completed
+✓ As-built drawings updated
+✓ Quality control forms signed
+✓ Final inspection scheduled
+
+**Operation Status**: **COMPLETE**
+**Next Steps**: Site restoration and final paperwork
+
+Congratulations on successful completion of the directional drilling operation!""",
+            "classification": {
+                "category": "DRILL_OPERATION_COMPLETE",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_OPERATION_COMPLETE",
+                "query_type": "drilling_workflow",
+                "render_type": "drill_operation_complete",
+                "completion_data": {
+                    "total_length": 250,
+                    "installation_time": 4.5,
+                    "product_type": "6_inch_hdpe_conduit",
+                    "grade_tolerance": 0.2
+                }
+            }
+        },
+        priority=87,
+        exact_match=False
+    )
+)
+
+
 # Commercial Drywall Protection Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
