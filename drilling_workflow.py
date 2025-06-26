@@ -429,6 +429,7 @@ Continue drilling and report position at next checkpoint."""
             """, conversation_id, json.dumps(session), datetime.now())
 
 # Integration function for bubble_backend.py
+# Integration function for bubble_backend.py
 async def process_drilling_workflow(
     request,
     conversation_context: Optional[Dict] = None,
@@ -437,6 +438,23 @@ async def process_drilling_workflow(
     """Process drilling workflow queries"""
     
     if not pool:
+        return None
+    
+    # ENSURE TABLE EXISTS BEFORE PROCESSING
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS drilling_sessions (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id TEXT NOT NULL UNIQUE,
+                    workflow_data JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            print("✅ Drilling sessions table verified in workflow handler")
+    except Exception as e:
+        print(f"❌ Error ensuring drilling_sessions table: {e}")
         return None
     
     handler = DrillingWorkflowHandler(pool)
