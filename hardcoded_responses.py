@@ -679,6 +679,29 @@ def handle_drill_logging_query(query: str, conversation_context: Dict) -> Option
     # Otherwise, process as a conversational drill logging entry
     return processor.process_drilling_conversation(query)
 
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern="drill log",
+        is_regex=False,
+        exact_match=True,
+        response_data={
+            "status": "success",
+            "answer": "# Drill Logging Assistant Ready\n\nI'm ready to document your drilling progress...",
+            "classification": {
+                "category": "DRILL_LOGGING_CONVERSATIONAL",
+                "confidence": 1.0
+            },
+            "sources": [],
+            "metadata": {
+                "category": "DRILL_LOGGING_CONVERSATIONAL",
+                "query_type": "conversational_logging",
+                "render_type": "drill_logging_interface"  # ✅ This should work!
+            }
+        },
+        priority=100  # Highest priority
+    )
+)
+
 # Contract Dispute Analysis Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
@@ -1057,14 +1080,32 @@ Proper bearing alignment is critical to achieving consistent material forming. T
 # Function to check for hardcoded responses
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
+    
+    # ADD THIS DEBUGGING CODE HERE - RIGHT AT THE START OF THE FUNCTION
+    pattern1 = r"drill.*(log|logging|start|begin)"
+    pattern2 = r"(drill|drilling|bore|boring).*(log|logging|report|documentation|record|mud|pullback|depth|pressure)"
+    
+    print(f"🔍 DEBUGGING PATTERN MATCHING:")
+    print(f"Query: '{query}'")
+    print(f"Pattern 1 match: {bool(re.search(pattern1, query, re.IGNORECASE))}")
+    print(f"Pattern 2 match: {bool(re.search(pattern2, query, re.IGNORECASE))}")
+    print(f"Query lowercase: '{query.lower()}'")
+    
+    # EXISTING CODE CONTINUES BELOW
     matching_responses = []
     
     for response in HARDCODED_RESPONSES:
         if response.matches(query):
             matching_responses.append(response)
+            print(f"✅ MATCHED: {response.query_pattern} (priority: {response.priority})")
     
     if not matching_responses:
+        print(f"❌ NO MATCHES for query: {query}")
         return None
     
     # Return the highest priority response
-    return sorted(matching_responses, key=lambda x: x.priority, reverse=True)[0].response_data
+    selected = sorted(matching_responses, key=lambda x: x.priority, reverse=True)[0]
+    print(f"🎯 SELECTED: {selected.query_pattern} (priority: {selected.priority})")
+    print(f"📋 METADATA: {selected.response_data.get('metadata', {})}")
+    
+    return selected.response_data
