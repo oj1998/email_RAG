@@ -1164,6 +1164,106 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+# Maryland Fire Rating Hardcoded Responses - MUTUALLY EXCLUSIVE
+
+# Maryland Fire Rating Code Compliance - Part 1
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(maryland|MD).*(fire.{0,10}rated|fire.{0,10}rating|fire.{0,10}code).*(wall|assembly|dental|medical).*(bethesda|hour|hours)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Maryland Fire Code Requirements - Healthcare Facilities
+
+Maryland requires **2-hour fire-rated wall assemblies** for dental office treatment rooms. Your current 1-hour specification does not meet state requirements.
+
+## Code Authority
+**IBC Section 508.2 + Maryland Amendment:** Healthcare occupancies require 2-hour fire separation between treatment areas and corridors.
+
+## Required Changes
+- Upgrade from 1-hour to 2-hour fire-rated assembly
+- Double layer 5/8" Type X drywall (instead of single layer)
+- 6" metal studs with mineral wool insulation
+
+## Impact
+- **Cost:** +$4,200 for assembly upgrade
+- **Schedule:** +2 days additional installation time
+
+Your contract will need modification to ensure fire code compliance.""",
+            "classification": {
+                "category": "MD_FIRE_RATING_COMPLIANCE",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "ibc-508-healthcare",
+                    "title": "IBC Section 508 - Healthcare Occupancies",
+                    "page": 5,
+                    "confidence": 0.94,
+                    "excerpt": "Healthcare occupancies require 2-hour fire separation between treatment areas and corridors per Maryland amendments."
+                }
+            ],
+            "metadata": {
+                "category": "MD_FIRE_RATING_COMPLIANCE",
+                "query_type": "document",
+                "render_type": "maryland_fire_rating",
+                "compliance_issue": "fire_rating_upgrade_required"
+            }
+        },
+        priority=96,
+        exact_match=False
+    )
+)
+
+# Maryland Fire Rating Contract Change Order - Part 2  
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(change.{0,10}order|modify.{0,10}contract).*(fire.{0,10}rated|2.{0,10}hour|upgrade).*(wall|assembly)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Change Order CO-2025-0158: Fire-Rated Wall Upgrade
+
+## Contract Modification Summary
+- **Original Contract:** $187,500
+- **Change Order Value:** +$4,200  
+- **New Contract Total:** $191,700
+- **Schedule Impact:** +2 days
+
+## Reason for Change
+Maryland fire code requires 2-hour fire-rated wall assemblies for dental treatment rooms. Original contract specified 1-hour assemblies which do not meet state requirements.
+
+## Technical Modifications
+**Section 09 22 16 - Interior Gypsum Board:**
+Replace "1-hour fire-rated assembly with single layer 5/8" Type X" with "2-hour fire-rated assembly with double layer 5/8" Type X and 6" metal studs"
+
+## Approval Required
+Dr. Sarah Chen must approve this change order to proceed with fire code compliance modifications.""",
+            "classification": {
+                "category": "MD_FIRE_RATING_CHANGE_ORDER",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "contract-ctr-2025-md-187", 
+                    "title": "Original Contract CTR-2025-MD-187",
+                    "page": 1,
+                    "confidence": 0.98,
+                    "excerpt": "Bethesda Dental Office construction contract with wall assembly specifications."
+                }
+            ],
+            "metadata": {
+                "category": "MD_FIRE_RATING_CHANGE_ORDER",
+                "query_type": "document",
+                "render_type": "simple_change_order",
+                "change_order_number": "CO-2025-0158"
+            }
+        },
+        priority=95,
+        exact_match=False
+    )
+)
+
 # Contract Dispute Analysis Response
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
