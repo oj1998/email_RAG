@@ -1050,6 +1050,94 @@ The change order ensures full compliance with IBC Section 517.13, Maryland Amend
     )
 )
 
+# Weekly Client Update Generation
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(create|generate|write).*(end.{0,10}of.{0,10}week|weekly|client).*(update|report|summary)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Weekly Client Update Generated
+
+## Email Content
+
+**To:** Dr. Sarah Chen <chen@bethesdadental.com>  
+**Subject:** Bethesda Dental Office - Weekly Update  
+**From:** Project Management Team
+
+Dear Dr. Chen,
+
+Here's your weekly progress update for the Bethesda dental office project:
+
+**This Week's Accomplishments:**
+• Finalized and submitted all permitting paperwork to Montgomery County
+• Completed equipment coordination meeting with dental supplier (confirmed delivery schedule)
+• Received MEP engineering drawings approval
+• Finalized material selections and submitted procurement schedule
+
+**Project Status:**
+• Budget: $191,700 (includes recent fire code compliance adjustment)
+• Pre-construction Phase: 85% complete
+• Construction start: January 6, 2025
+
+**Next Week's Focus:**
+• Await permit approval (expected by Dec 23)
+• Begin material procurement for long-lead items
+• Schedule pre-construction meeting with trades
+
+Please let me know if you have any questions.
+
+Best regards,  
+Project Management Team
+
+## Data Sources
+Information compiled from: Procore (budget/progress), PlanGrid (drawings), Building Department Portal (permits), Supplier CRM (equipment meetings), Microsoft Project (schedule)""",
+            "classification": {
+                "category": "CLIENT_WEEKLY_UPDATE",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "procore-project-data",
+                    "title": "Procore Project Management System",
+                    "page": 1,
+                    "confidence": 0.98,
+                    "excerpt": "Budget tracking, change orders, and project progress data for Bethesda Dental Office project."
+                },
+                {
+                    "id": "plangrid-drawings",
+                    "title": "PlanGrid Drawing Management",
+                    "page": 1,
+                    "confidence": 0.95,
+                    "excerpt": "MEP engineering drawings approval status and document management records."
+                },
+                {
+                    "id": "permit-portal-data",
+                    "title": "Montgomery County Building Department Portal",
+                    "page": 1,
+                    "confidence": 0.92,
+                    "excerpt": "Permit submission status and approval tracking for commercial dental office buildout."
+                }
+            ],
+            "metadata": {
+                "category": "CLIENT_WEEKLY_UPDATE",
+                "query_type": "document",
+                "render_type": "client_weekly_update",
+                "update_period": "week_ending_2024_12_20",
+                "data_sources": [
+                    "procore",
+                    "plangrid", 
+                    "building_dept_portal",
+                    "supplier_crm",
+                    "microsoft_project"
+                ]
+            }
+        },
+        priority=93,
+        exact_match=False
+    )
+)
+
 # Construction Aggregates Alternative
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
