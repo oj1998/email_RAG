@@ -868,6 +868,188 @@ Different climate models project varying outcomes for certain regions, particula
     )
 )
 
+# Maryland Dental Office Code Compliance - Part 1
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(maryland|MD).*(electrical code|building code).*(medical|dental|healthcare|patient care).*(low voltage|conduit|cable|wiring).*(bethesda|montgomery county)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Maryland Electrical Code Requirements - Medical Facilities
+
+## Code Compliance Analysis for Bethesda Dental Office
+
+Based on Maryland building code requirements, **all low voltage cables in dental operatories must be installed in metallic conduit**. Your current specification for plastic conduit does not meet compliance requirements.
+
+### Specific Code Requirements:
+- **IBC Section 517.13:** Healthcare facilities electrical systems
+- **Maryland Amendment MA-517.13.2:** Metal conduit required for patient care areas  
+- **Montgomery County Amendment MC-E-1.4:** Enhanced grounding for medical facilities
+
+### Technical Requirements:
+- All low voltage cables in patient care areas must use EMT or rigid metal conduit
+- Metal junction boxes with proper bonding provisions
+- Enhanced equipment grounding system connectivity
+- Separate conduits for power and low voltage in patient areas
+
+### Compliance Impact:
+- **Cost Increase:** $8,400 - $12,600 for metallic conduit upgrade
+- **Schedule Impact:** Additional 3-4 days for specialized installation
+- **Affected Systems:** Dental equipment controls, patient monitoring, emergency communication
+
+The current contract specification for PVC conduit will require modification to ensure code compliance and permit approval.""",
+            "classification": {
+                "category": "MARYLAND_CODE_COMPLIANCE",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "ibc-517-healthcare",
+                    "title": "IBC Section 517 - Healthcare Facilities",
+                    "page": 13,
+                    "confidence": 0.96,
+                    "excerpt": "Electrical wiring in patient care areas shall be installed in metal raceway systems to ensure proper grounding and electromagnetic shielding."
+                },
+                {
+                    "id": "md-amendment-517",
+                    "title": "Maryland Amendment MA-517.13.2",
+                    "page": 2,
+                    "confidence": 0.94,
+                    "excerpt": "All low voltage cables in dental operatories must use EMT or rigid metal conduit with proper bonding provisions."
+                },
+                {
+                    "id": "mc-electrical-medical",
+                    "title": "Montgomery County Electrical Code - Medical Facilities",
+                    "page": 8,
+                    "confidence": 0.92,
+                    "excerpt": "Additional bonding requirements for dental equipment grounding systems in Montgomery County."
+                }
+            ],
+            "metadata": {
+                "category": "MARYLAND_CODE_COMPLIANCE",
+                "query_type": "document",
+                "render_type": "maryland_code_compliance",
+                "compliance_analysis": {
+                    "jurisdiction": "Montgomery County, Maryland",
+                    "project_type": "Commercial Dental Office",
+                    "compliance_status": "Non-compliant - requires modification"
+                },
+                "code_references": [
+                    {
+                        "code": "IBC 517.13",
+                        "title": "Healthcare Facilities Electrical Systems",
+                        "requirement": "Metal raceway for patient care areas"
+                    },
+                    {
+                        "code": "Maryland Amendment MA-517.13.2", 
+                        "title": "Enhanced Grounding Requirements",
+                        "requirement": "EMT conduit for dental operatories"
+                    },
+                    {
+                        "code": "Montgomery County MC-E-1.4",
+                        "title": "Medical Facility Standards",
+                        "requirement": "Additional bonding for dental equipment"
+                    }
+                ],
+                "local_amendments": [
+                    {
+                        "amendment": "MA-517.13.2",
+                        "description": "Maryland-specific requirement for metallic conduit in dental facilities"
+                    },
+                    {
+                        "amendment": "MC-E-1.4",
+                        "description": "Montgomery County bonding requirements"
+                    }
+                ]
+            }
+        },
+        priority=95,  # High priority for code compliance
+        exact_match=False
+    )
+)
+
+# Maryland Dental Office Contract Change Order - Part 2
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(change order|contract|modify contract).*(add|include|upgrade).*(metal conduit|EMT|metallic conduit|code compliance).*(bethesda|dental)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Contract Change Order: Maryland Code Compliance
+
+## Change Order CO-2025-0241 Generated
+
+I've prepared a comprehensive change order to modify your Bethesda dental office contract for Maryland electrical code compliance.
+
+### Contract Modification Summary:
+- **Original Contract:** CTR-2025-MD-187 ($248,750)
+- **Change Order Value:** +$10,450
+- **New Contract Total:** $259,200
+- **Schedule Impact:** +3 days
+
+### Key Contract Changes:
+1. **Materials Specification:** Replace PVC conduit with EMT conduit for all low voltage applications in patient care areas
+2. **Technical Standards:** Add enhanced grounding and bonding requirements per Maryland amendments
+3. **Completion Date:** Extended from March 26 to March 29, 2025
+
+### Detailed Cost Breakdown:
+- EMT Conduit upgrade (840 LF): $2,940
+- Metal junction boxes (24 EA): $1,680  
+- Bonding hardware & fittings: $850
+- Additional specialized labor: $3,840
+- Engineering review & permits: $760
+- Project management: $380
+
+### Approval Required:
+Dr. Sarah Chen, DDS must sign this change order to authorize the code compliance modifications and proceed with metallic conduit installation.
+
+The change order ensures full compliance with IBC Section 517.13, Maryland Amendment MA-517.13.2, and Montgomery County electrical requirements for medical facilities.""",
+            "classification": {
+                "category": "CONTRACT_CHANGE_ORDER",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "contract-ctr-2025-md-187",
+                    "title": "Original Contract CTR-2025-MD-187",
+                    "page": 1,
+                    "confidence": 0.98,
+                    "excerpt": "Bethesda Dental Office electrical installation contract with material specifications and completion requirements."
+                }
+            ],
+            "metadata": {
+                "category": "CONTRACT_CHANGE_ORDER",
+                "query_type": "document", 
+                "render_type": "contract_change_order",
+                "change_order_data": {
+                    "change_order_number": "CO-2025-0241",
+                    "original_contract": "CTR-2025-MD-187",
+                    "original_value": 248750,
+                    "change_value": 10450,
+                    "new_total": 259200,
+                    "reason": "Maryland electrical code compliance"
+                },
+                "contract_modifications": {
+                    "materials": "Replace PVC with EMT conduit",
+                    "schedule": "Extend completion by 3 days", 
+                    "price": "Increase by $10,450",
+                    "specifications": "Add metallic conduit requirements"
+                },
+                "cost_breakdown": {
+                    "emt_conduit": 2940,
+                    "metal_boxes": 1680,
+                    "bonding_hardware": 850,
+                    "additional_labor": 3840,
+                    "engineering": 760,
+                    "management": 380
+                }
+            }
+        },
+        priority=94,  # High priority for contract modification
+        exact_match=False
+    )
+)
+
 # Construction Aggregates Alternative
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
