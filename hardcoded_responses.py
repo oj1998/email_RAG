@@ -1015,6 +1015,79 @@ Change order ready for client approval and implementation.""",
     )
 )
 
+# Add this to hardcoded_responses.py - AFTER the other mold responses
+
+# BuilderTrend Client Portal Update
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(thanks|let's|now).*(update|notify).*(client portal|buildertrend|BuilderTrend).*(in the loop|loop|informed)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# BuilderTrend Client Portal Update
+
+BuilderTrend client portal update prepared for Sea Cliff project to notify stakeholders of mold remediation status.
+
+## Client Portal Updates:
+- Project timeline updated with 3-day extension
+- Change order CO-2025-0259 added to financial summary  
+- Daily log entry: Mold discovery and remediation plan
+- Photo gallery: Before/during remediation documentation
+- Next milestone: Remediation completion (estimated May 23)
+
+## Notifications to Send:
+- Email alert to project stakeholders
+- SMS notification to key contacts
+- Mobile app push notification
+
+## Communication Strategy:
+The portal update will provide complete transparency about the environmental discovery, remediation plan, and revised project timeline. All stakeholders will receive immediate notification through their preferred communication channels.
+
+Portal updates maintain project transparency and keep all parties informed of environmental remediation progress and schedule adjustments.""",
+            "classification": {
+                "category": "BUILDERTREND_PORTAL_UPDATE",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "buildertrend-api-documentation",
+                    "title": "BuilderTrend API Documentation",
+                    "page": "Section 4.1",
+                    "confidence": 0.92,
+                    "excerpt": "Client portal updates require project timeline synchronization, change order integration, and automated stakeholder notification workflows."
+                },
+                {
+                    "id": "sea-cliff-communication-protocol",
+                    "title": "Sea Cliff Project Communication Protocol", 
+                    "page": 3,
+                    "confidence": 0.89,
+                    "excerpt": "Environmental issues require immediate client notification through all available channels including portal updates, email alerts, and direct communication."
+                }
+            ],
+            "metadata": {
+                "category": "BUILDERTREND_PORTAL_UPDATE",
+                "query_type": "document",
+                "render_type": "buildertrend_portal_renderer",
+                "project_name": "Sea Cliff",
+                "portal_updates": [
+                    "timeline_extension",
+                    "change_order_integration", 
+                    "daily_log_entry",
+                    "photo_documentation",
+                    "milestone_updates"
+                ],
+                "notifications": [
+                    "email_alerts",
+                    "sms_notifications", 
+                    "mobile_push"
+                ]
+            }
+        },
+        priority=92,  # High priority but below change order
+        exact_match=False
+    )
+)
+
 # Climate Data Visualization
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
