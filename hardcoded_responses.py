@@ -723,6 +723,69 @@ Congratulations on successful completion of the directional drilling operation!"
     )
 )
 
+# Add this to hardcoded_responses.py - AFTER the first mold response
+
+# Mold SOP Procedures for Severe Mold Discovery
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(SOP|standard operating procedure|procedures?).*(severe mold|unexpected mold|mold).*(wall|demo|demolition)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Standard Operating Procedures - Severe Mold Discovery
+
+Our Standard Operating Procedures require **immediate work stoppage and specialist intervention** when severe mold is discovered during demolition.
+
+According to SOP Section 4.2 - Environmental Hazards, all demolition work must cease immediately upon discovery of unexpected mold conditions. A certified mold specialist must assess the situation before work can resume.
+
+This protocol was established following lessons learned from the Harbor View project where initial mold discovery led to extensive remediation costs due to delayed specialist involvement.
+
+## Required Immediate Actions:
+1. Stop all demolition work in affected area
+2. Contact certified mold specialist within 4 hours
+3. Establish temporary containment if advised by specialist
+4. Document discovery with photos and location mapping
+5. Notify project manager and safety coordinator
+
+## Next Steps:
+- Await specialist assessment before resuming any work
+- Prepare for potential scope and schedule adjustments
+- Review insurance coverage for environmental discoveries""",
+            "classification": {
+                "category": "MOLD_SOP_PROCEDURES",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "safety-field-guide-environmental",
+                    "title": "Safety Field Guide - Environmental Protocols",
+                    "page": "Section 4.2",
+                    "confidence": 0.96,
+                    "excerpt": "Immediate work stoppage required upon discovery of unexpected mold conditions during demolition. Certified mold specialist must assess before work resumption."
+                },
+                {
+                    "id": "harbor-view-lessons-learned",
+                    "title": "Harbor View Project - Lessons Learned Report", 
+                    "page": 15,
+                    "confidence": 0.92,
+                    "excerpt": "Delayed specialist response resulted in $47,000 additional remediation costs and 12-day schedule impact due to contamination spread."
+                }
+            ],
+            "metadata": {
+                "category": "MOLD_SOP_PROCEDURES",
+                "query_type": "document",
+                "render_type": "mold_sop_renderer",
+                "sop_section": "4.2_environmental_hazards",
+                "safety_priority": "high",
+                "work_stoppage_required": True,
+                "specialist_required": True
+            }
+        },
+        priority=96,  # Slightly higher priority than the discovery response
+        exact_match=False
+    )
+)
+
 
 # Commercial Drywall Protection Response
 HARDCODED_RESPONSES.append(
