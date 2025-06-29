@@ -946,6 +946,75 @@ This discovery was not anticipated based on available project documentation.""",
     )
 )
 
+# Add this to hardcoded_responses.py - AFTER the other mold responses
+
+# Mold Remediation Change Order
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(create|generate|can we).*(change order|change-order).*(mold|mould).*(remediation|removal|cleanup).*(100|sqft|square feet)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Mold Remediation Change Order Generated
+
+Change order **CO-2025-0259** has been generated for mold remediation at the Sea Cliff project.
+
+**Scope:** 100 square feet of mold remediation including containment, removal, and surface treatment per industry standards. Work includes proper disposal and air quality testing.
+
+**Cost Impact:** $4,850 additional to contract
+**Schedule Impact:** 3-day extension for remediation
+
+## Work Breakdown:
+- Containment setup and negative air pressure system
+- Mold removal and affected material disposal  
+- HEPA filtration and air scrubbing
+- Surface treatment and antimicrobial application
+- Post-remediation air quality testing
+- Documentation and certification
+
+## Regulatory Compliance:
+- IICRC S520 Standard procedures followed
+- EPA mold remediation guidelines compliance
+- Local health department notification requirements
+- Proper hazardous waste disposal protocols
+
+Change order ready for client approval and implementation.""",
+            "classification": {
+                "category": "MOLD_CHANGE_ORDER_GENERATION",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "iicrc-s520-standards",
+                    "title": "Mold Remediation Standards - IICRC S520",
+                    "page": "Section 3.2",
+                    "confidence": 0.94,
+                    "excerpt": "Containment and removal procedures for areas up to 100 square feet require negative air pressure, HEPA filtration, and certified disposal methods."
+                },
+                {
+                    "id": "sea-cliff-contract-amendment",
+                    "title": "Sea Cliff Project Contract - Amendment Protocol", 
+                    "page": 8,
+                    "confidence": 0.89,
+                    "excerpt": "Environmental discoveries during demolition require immediate change order processing with scope documentation and regulatory compliance verification."
+                }
+            ],
+            "metadata": {
+                "category": "MOLD_CHANGE_ORDER_GENERATION",
+                "query_type": "document",
+                "render_type": "mold_change_order_renderer",
+                "project_name": "Sea Cliff",
+                "change_order_number": "CO-2025-0259",
+                "remediation_area": "100_sqft",
+                "cost_impact": 4850,
+                "schedule_impact_days": 3
+            }
+        },
+        priority=93,  # High priority but below SOPs and discovery
+        exact_match=False
+    )
+)
+
 # Climate Data Visualization
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
