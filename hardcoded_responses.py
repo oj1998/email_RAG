@@ -815,6 +815,74 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(sea cliff|seacliff).*(demo|demolition).*(mold|mould).*(information|info|documented|reports|data)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """# Mold Discovery - Sea Cliff Project
+
+## Documentation Search Result: NO
+
+After comprehensive review of all Sea Cliff project documentation, **no prior mold conditions were documented** during pre-demolition assessments or inspection reports.
+
+## Immediate Response Protocol
+
+This appears to be a new discovery requiring immediate safety protocols:
+
+**STOP WORK ORDER INITIATED**
+- Halt all demolition work in affected area
+- Establish containment protocols  
+- Contact environmental specialist for professional assessment
+- Document with photos and GPS coordinates
+
+## Required Next Steps
+1. Schedule professional mold assessment within 24 hours
+2. Update safety protocols for demolition crew
+3. Prepare change order for remediation scope
+4. Review insurance coverage for environmental discovery
+
+## Documentation Sources Reviewed
+- Sea Cliff Project Inspection Report (Page 12): "No visible mold or moisture damage observed"
+- STOW Environmental Assessment (Page 7): "Pre-demolition environmental screening complete"
+
+This discovery was not anticipated based on available project documentation.""",
+            "classification": {
+                "category": "ENVIRONMENTAL_DISCOVERY",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "sea-cliff-inspection-2024",
+                    "title": "Sea Cliff Project Inspection Report",
+                    "page": 12,
+                    "confidence": 0.94,
+                    "excerpt": "No visible mold or moisture damage observed during initial structural assessment. All areas appeared dry with no signs of water intrusion."
+                },
+                {
+                    "id": "stow-environmental-assessment", 
+                    "title": "STOW Environmental Assessment",
+                    "page": 7,
+                    "confidence": 0.91,
+                    "excerpt": "Pre-demolition environmental screening complete. No hazardous materials identified during visual inspection and air quality testing."
+                }
+            ],
+            "metadata": {
+                "category": "MOLD_DISCOVERY_SEA_CLIFF",
+                "query_type": "document",
+                "render_type": "mold_discovery_renderer",
+                "project_name": "Sea Cliff",
+                "discovery_type": "environmental_hazard",
+                "safety_priority": "high",
+                "work_stoppage_required": True
+            }
+        },
+        priority=95,  # High priority for safety issues
+        exact_match=False
+    )
+)
+
 # Climate Data Visualization
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
