@@ -267,6 +267,59 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(new here|don't have|no access|best practices|before.*drill|pre.*drill|what.*before|sop.*guide)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """Quick reference for essential pre-drilling steps when you don't have immediate access to our SOP guide.""",
+            "classification": {
+                "category": "PRE_DRILLING_BEST_PRACTICES",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "sop-chapter-3",
+                    "title": "SOP Guide Chapter 3: Pre-Drilling Safety",
+                    "page": 15,
+                    "confidence": 0.94,
+                    "excerpt": "Personal protective equipment verification and utility locating procedures are mandatory before any drilling operations commence."
+                },
+                {
+                    "id": "field-ops-manual-2-1",
+                    "title": "Field Operations Manual Section 2.1",
+                    "page": 8,
+                    "confidence": 0.89,
+                    "excerpt": "Site access and staging area setup must be completed and documented before equipment mobilization."
+                },
+                {
+                    "id": "qa-procedures-v2-3",
+                    "title": "Quality Assurance Procedures v2.3",
+                    "page": 22,
+                    "confidence": 0.91,
+                    "excerpt": "Quality control documentation preparation and crew briefing requirements for all drilling operations."
+                },
+                {
+                    "id": "corporate-safety-standards",
+                    "title": "Corporate Safety Standards Document",
+                    "page": 5,
+                    "confidence": 0.96,
+                    "excerpt": "Emergency contact information posting and equipment safety inspections are required safety measures."
+                }
+            ],
+            "metadata": {
+                "category": "PRE_DRILLING_BEST_PRACTICES",
+                "query_type": "drilling_workflow",
+                "render_type": "pre_drilling_best_practices",
+                "sop_reference": True,
+                "new_worker_guidance": True
+            }
+        },
+        priority=85
+    )
+)
+
 def get_hardcoded_response(query: str) -> Optional[Dict[str, Any]]:
     """Check if we have a hardcoded response for this query"""
     
