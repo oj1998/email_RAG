@@ -39,15 +39,7 @@ HARDCODED_RESPONSES.append(
         is_regex=True,
         response_data={
             "status": "success",
-            "answer": """I'm your drilling assistant, ready to document your operation step by step.
-
-**Quick Start Examples:**
-- "Starting bore at station 15+50" (Setup)
-- "At 75 feet, hitting clay layer" (Progress) 
-- "Steering off target, drifting left" (Issues)
-- "Pullback complete, 350 feet total" (Completion)
-
-Just describe what's happening and I'll guide you through the proper documentation.""",
+            "answer": """Ready to document your drilling operation. Just describe what's happening and I'll help create the proper logs.""",
             "classification": {
                 "category": "DRILL_LOGGING_INTERFACE",
                 "confidence": 1.0
@@ -171,16 +163,7 @@ HARDCODED_RESPONSES.append(
         is_regex=True,
         response_data={
             "status": "success",
-            "answer": """🎉 Drilling operation complete! 
-
-Installation successful - 350 feet total length.
-
-**Final Documentation Options:**
-- Generate comprehensive drilling report
-- Add final project notes
-- Start new drilling project
-
-All drilling data has been captured and is ready for final reporting.""",
+            "answer": """Installation successful - 350 feet total length completed.""",
             "classification": {
                 "category": "DRILL_COMPLETION_SUMMARY",
                 "confidence": 1.0
