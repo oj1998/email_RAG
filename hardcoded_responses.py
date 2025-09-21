@@ -230,6 +230,42 @@ This ensures proper documentation of all steering adjustments.""",
     )
 )
 
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(summarize|summary).*(project|progress).*(client|weekly|update).*(change order|CO)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """Weekly project summary prepared for client communication.""",
+            "classification": {
+                "category": "WEEKLY_CLIENT_UPDATE",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "procore-progress-dashboard",
+                    "title": "Procore Project Progress Dashboard - Week 12",
+                    "page": 1,
+                    "confidence": 0.97,
+                    "excerpt": "Current project completion stands at 68% with dental office fit-out progressing on schedule. Material compliance issue identified and addressed through change order process.",
+                    "document_type": "progress_report",
+                    "procore_id": "PROG-DASH-W12",
+                    "last_updated": "2025-09-20"
+                }
+            ],
+            "metadata": {
+                "category": "WEEKLY_CLIENT_UPDATE",
+                "query_type": "client_communication",
+                "render_type": "weekly_client_update",
+                "project_week": "12",
+                "completion_percentage": "68",
+                "update_type": "standard_weekly"
+            }
+        },
+        priority=91
+    )
+)
+
 # Add to hardcoded_responses.py
 
 # Healthcare Countertop Compliance Response
