@@ -55,6 +55,42 @@ HARDCODED_RESPONSES.append(
     )
 )
 
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(need|create|make|generate).*(change order|CO|change-order).*(procore|replace|replacement)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """Initiating automated change order creation for material replacement.""",
+            "classification": {
+                "category": "AUTOMATED_CHANGE_ORDER",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "procore-workflow-automation",
+                    "title": "Procore Change Order Automation Guidelines",
+                    "page": 8,
+                    "confidence": 0.94,
+                    "excerpt": "Automated change order workflows can streamline material replacement processes by pre-populating standard fields, calculating cost impacts, and routing approvals based on predefined criteria.",
+                    "document_type": "automation_guide",
+                    "procore_id": "AUTO-CO-2025-001",
+                    "last_updated": "2025-08-30"
+                }
+            ],
+            "metadata": {
+                "category": "AUTOMATED_CHANGE_ORDER",
+                "query_type": "workflow_automation",
+                "render_type": "automated_change_order",
+                "automation_level": "streamlined",
+                "estimated_time_saved": "45_minutes",
+                "approval_status": "pending_review"
+            }
+        },
+        priority=92
+    )
+)
+
 # Step 1: Setup Check - "Starting new bore at station 15+50"
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
