@@ -156,6 +156,76 @@ This ensures proper documentation of all steering adjustments.""",
     )
 )
 
+# Add to hardcoded_responses.py
+
+# Healthcare Countertop Compliance Response
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(countertop|counter|surface).*(porous|dentist|dental|office|healthcare|medical).*(allowed|permit|code|compliant|acceptable)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """Non-compliant countertop material identified in healthcare facility.""",
+            "classification": {
+                "category": "HEALTHCARE_COUNTERTOP_COMPLIANCE",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "procore-specs-HC-2024-001",
+                    "title": "Healthcare Facility Specifications - Surface Materials",
+                    "page": 23,
+                    "confidence": 0.98,
+                    "excerpt": "All countertop surfaces in patient care areas must be non-porous, seamless materials resistant to chemical disinfectants per CDC guidelines.",
+                    "document_type": "project_specification",
+                    "procore_id": "SPEC-HC-001",
+                    "last_updated": "2024-08-15"
+                },
+                {
+                    "id": "procore-submittal-CT-approved",
+                    "title": "Approved Countertop Material Submittal Package",
+                    "page": 5,
+                    "confidence": 0.95,
+                    "excerpt": "Approved materials include: Corian solid surface, quartz composite, or stainless steel with welded seams. Porous materials including natural stone are prohibited.",
+                    "document_type": "approved_submittal",
+                    "procore_id": "SUB-CT-2024-003",
+                    "last_updated": "2024-07-22"
+                },
+                {
+                    "id": "procore-inspection-checklist",
+                    "title": "Healthcare Quality Control Inspection Checklist",
+                    "page": 12,
+                    "confidence": 0.92,
+                    "excerpt": "Surface porosity test required for all countertop installations. Any material showing absorption must be rejected and replaced.",
+                    "document_type": "quality_checklist",
+                    "procore_id": "QC-HC-SURFACES",
+                    "last_updated": "2024-09-01"
+                },
+                {
+                    "id": "procore-change-order-template",
+                    "title": "Healthcare Compliance Change Order Template",
+                    "page": 3,
+                    "confidence": 0.89,
+                    "excerpt": "Non-compliant surface materials require immediate removal and replacement with approved alternatives at contractor expense per Section 3.2.4.",
+                    "document_type": "change_order_template",
+                    "procore_id": "CO-TEMPLATE-HC",
+                    "last_updated": "2024-06-10"
+                }
+            ],
+            "metadata": {
+                "category": "HEALTHCARE_COUNTERTOP_COMPLIANCE",
+                "query_type": "compliance_check",
+                "render_type": "healthcare_countertop_compliance",
+                "compliance_status": "non_compliant",
+                "action_required": "immediate_replacement",
+                "project_phase": "inspection",
+                "cost_responsibility": "contractor"
+            }
+        },
+        priority=95
+    )
+)
+
 # Step 4: Completion Summary - "Pullback complete, 350 feet total"
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
