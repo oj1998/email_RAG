@@ -122,6 +122,44 @@ This helps track drilling efficiency and soil conditions.""",
     )
 )
 
+# Add to hardcoded_responses.py
+
+# Contract Conflict SOP Response
+HARDCODED_RESPONSES.append(
+    HardcodedResponse(
+        query_pattern=r"(sop|procedure|protocol|process).*(contract|conflict|dispute|disagreement|issue)",
+        is_regex=True,
+        response_data={
+            "status": "success",
+            "answer": """Standard Operating Procedure for contract conflicts on this project.""",
+            "classification": {
+                "category": "CONTRACT_CONFLICT_SOP",
+                "confidence": 1.0
+            },
+            "sources": [
+                {
+                    "id": "field-sop-section-5",
+                    "title": "Field Digital Standard Operating Procedures - Section 5: Contract Conflicts & Change Order Management",
+                    "page": 15,
+                    "confidence": 0.96,
+                    "excerpt": "When field conditions or work performed conflicts with contract documents, immediate action is required: document the conflict with comprehensive photos, create detailed written descriptions in Procore Daily Log, and initiate change order workflow through established protocols.",
+                    "document_type": "field_sop",
+                    "procore_id": "SOP-FIELD-2025-001",
+                    "last_updated": "2025-09-15"
+                }
+            ],
+            "metadata": {
+                "category": "CONTRACT_CONFLICT_SOP",
+                "query_type": "procedure_lookup",
+                "render_type": "contract_conflict_sop",
+                "sop_section": "conflict_resolution",
+                "workflow_type": "standard_procedure"
+            }
+        },
+        priority=95
+    )
+)
+
 # Step 3: Issue Documentation - "Steering off target, drifting left"
 HARDCODED_RESPONSES.append(
     HardcodedResponse(
